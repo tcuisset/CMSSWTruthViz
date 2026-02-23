@@ -144,11 +144,11 @@ const DependencyExplorer = {
                 let neighbors;
 
                 if (direction === 'upstream') {
-                    // Upstream: nodes that this node depends on (predecessors)
-                    neighbors = node.incomers('node');
-                } else if (direction === 'downstream') {
-                    // Downstream: nodes that depend on this node (successors)
+                    // Upstream: what this module depends on (its dependencies/sources)
                     neighbors = node.outgoers('node');
+                } else if (direction === 'downstream') {
+                    // Downstream: what depends on this module (its consumers/dependents)
+                    neighbors = node.incomers('node');
                 } else {
                     // Both directions (includes cross-connections)
                     neighbors = node.neighborhood('node');
@@ -166,12 +166,14 @@ const DependencyExplorer = {
                 let connectedEdges;
 
                 if (direction === 'upstream') {
-                    connectedEdges = node.connectedEdges().filter(edge => {
-                        return edge.target().id() === node.id() && visited.has(edge.source().id());
-                    });
-                } else if (direction === 'downstream') {
+                    // Upstream: edges pointing FROM this node TO dependencies
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return edge.source().id() === node.id() && visited.has(edge.target().id());
+                    });
+                } else if (direction === 'downstream') {
+                    // Downstream: edges pointing TO this node FROM dependents
+                    connectedEdges = node.connectedEdges().filter(edge => {
+                        return edge.target().id() === node.id() && visited.has(edge.source().id());
                     });
                 } else {
                     // Both: include ALL edges between visited nodes (cross-connections)
