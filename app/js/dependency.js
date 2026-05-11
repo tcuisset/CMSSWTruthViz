@@ -10,7 +10,6 @@ const DependencyExplorer = {
     upstreamBtn: null,
     downstreamBtn: null,
     selectedModuleName: null,
-    autoShowOnClick: true,  // Auto-show dependencies when clicking a node
 
     /**
      * Initialize dependency explorer
@@ -35,31 +34,10 @@ const DependencyExplorer = {
         this.downstreamBtn.addEventListener('click', () => this.show('downstream'));
         this.showBtn.addEventListener('click', () => this.show('both'));
 
-        // Auto-show toggle
-        const autoToggle = document.getElementById('auto-deps-toggle');
-        if (autoToggle) {
-            autoToggle.addEventListener('change', (e) => {
-                this.autoShowOnClick = e.target.checked;
-                console.log('Auto-show dependencies:', this.autoShowOnClick);
-            });
-        }
-
         // Update selected module name when panel opens
         document.addEventListener('panelOpened', (e) => {
             this.selectedModuleName.textContent = e.detail.moduleName || 'None selected';
         });
-    },
-
-    /**
-     * Show dependencies for a specific node (called when clicking)
-     */
-    showForNode(node) {
-        const depth = parseInt(this.depthInput.value);
-        const direction = 'paths';  // Show direct paths only (no cross-connections)
-
-        console.log(`Auto-showing dependencies for ${node.data('label')} with depth:`, depth);
-
-        this.showDependenciesForNode(node, depth, direction);
     },
 
     /**

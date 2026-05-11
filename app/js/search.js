@@ -60,26 +60,13 @@ const SearchManager = {
         GraphManager.clearHighlight();
 
         if (matches.length === 1) {
-            // Single match: open panel, show dependencies automatically
+            // Single match: open panel and focus the matching node
             const node = matches[0];
             const label = node.data('label');
             const nodeId = node.id();
 
             node.addClass('highlighted');
             PanelManager.open(label, nodeId);
-
-            // Auto-show dependencies (paths mode)
-            if (DependencyExplorer && DependencyExplorer.showForNode) {
-                DependencyExplorer.showForNode(node);
-            } else {
-                // Fallback to just zoom if dependency explorer not ready
-                GraphManager.cy.animate({
-                    center: { eles: node },
-                    zoom: 1.5
-                }, {
-                    duration: 500
-                });
-            }
         } else {
             // Multiple matches: highlight all and fit view
             matches.addClass('highlighted');

@@ -202,7 +202,7 @@ const GraphManager = {
      * Setup event handlers for graph interactions
      */
     setupEventHandlers() {
-        // Node click - open panel and show dependencies
+        // Node click - open panel and select the module
         this.cy.on('tap', 'node', (evt) => {
             const node = evt.target;
             const moduleId = node.id();
@@ -210,11 +210,24 @@ const GraphManager = {
 
             console.log('Node clicked:', label);
             PanelManager.open(label, moduleId);
+        });
 
-            // Auto-show dependencies (upstream + downstream)
-            if (DependencyExplorer && DependencyExplorer.autoShowOnClick) {
-                DependencyExplorer.showForNode(node);
+        // Edge click - jump to the endpoint furthest from the current view center.
+        this.cy.on('tap', 'edge', (evt) => {
+            const edge = evt.target;
+            const destination = this.getFurthestEdgeEndpoint(edge);
+
+            if (destination) {
+                this.focusNode(destination);
             }
+        });
+
+        this.cy.on('mouseover', 'edge', () => {
+            this.cy.container().style.cursor = 'pointer';
+        });
+
+        this.cy.on('mouseout', 'edge', () => {
+            this.cy.container().style.cursor = '';
         });
 
         // Node hover - show tooltip
@@ -256,6 +269,61 @@ const GraphManager = {
             return true;
         }
         return false;
+    },
+
+    /**
+     * Select and center the graph on a node.
+     */
+    focusNode(node) {
+        this.cy.nodes().removeClass('selected');
+        node.addClass('selected');
+        KeyboardNav.selectedNode = node;
+
+        this.cy.animate({
+            center: { eles: node },
+            zoom: Math.max(this.cy.zoom(), 1.0)
+        }, {
+            duration: 300
+        });
+    },
+
+    /**
+     * Return the endpoint of an edge that is furthest from the current viewport center.
+     */
+    getFurthestEdgeEndpoint(edge) {
+        const source = edge.source();
+        const target = edge.target();
+
+        if (source.length === 0 || target.length === 0) {
+            return null;
+        }
+
+        const center = this.getViewportCenter();
+        const sourceDistance = this.distanceBetween(center, source.position());
+        const targetDistance = this.distanceBetween(center, target.position());
+
+        return sourceDistance > targetDistance ? source : target;
+    },
+
+    /**
+     * Current visible viewport center in graph coordinates.
+     */
+    getViewportCenter() {
+        const extent = this.cy.extent();
+
+        return {
+            x: (extent.x1 + extent.x2) / 2,
+            y: (extent.y1 + extent.y2) / 2
+        };
+    },
+
+    /**
+     * Calculate distance between two graph positions.
+     */
+    distanceBetween(p1, p2) {
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        return Math.sqrt(dx * dx + dy * dy);
     },
 
     /**
