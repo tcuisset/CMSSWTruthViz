@@ -9,6 +9,7 @@ import json
 import pydot
 import networkx as nx
 from pathlib import Path
+from particle import Particle
 
 
 GRAPH_STYLE_ATTRIBUTES = {
@@ -58,6 +59,26 @@ def fourth_tuple_value(value):
     return parts[3] if len(parts) >= 4 else None
 
 
+def particle_name_from_id(particle_id):
+    """Return a display name from a PDG ID using the particle package."""
+    try:
+        pdgid = int(particle_id)
+    except (TypeError, ValueError):
+        return None
+
+    try:
+        name = Particle.from_pdgid(pdgid).name
+    except Exception:
+        return None
+
+    # The HEP particle package reports PDG 23 as Z0; use the shorter label
+    # typically expected in graph displays.
+    if name == "Z0":
+        return "Z"
+
+    return name
+
+
 def build_display_label(node_id, attrs):
     """Build the default node label shown in Cytoscape."""
     data_attrs = {
@@ -75,7 +96,11 @@ def build_display_label(node_id, attrs):
         or data_attrs.get("pdg")
     )
     if particle_id is not None:
-        label_parts.append(f"pdgId/pid: {particle_id}")
+        particle_name = particle_name_from_id(particle_id)
+        if particle_name:
+            label_parts.append(f"particle: {particle_name}")
+        else:
+            label_parts.append(f"pdgId/pid: {particle_id}")
 
     energy = fourth_tuple_value(data_attrs.get("p4")) or fourth_tuple_value(data_attrs.get("x4"))
     if energy is not None:

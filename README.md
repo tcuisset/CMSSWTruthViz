@@ -334,10 +334,10 @@ Click any previous module to jump back in the history.
 
 ### Graph Layout
 
-The graph uses a force-directed layout (COSE algorithm) optimized for readability:
-- Large node spacing (50×35px nodes, 250px ideal edge length)
-- High repulsion force (800,000) to minimize overlap
-- Node labels visible by default with semi-transparent backgrounds
+The graph uses a hierarchical Dagre layout, similar in spirit to Graphviz `dot`:
+- Directed ranks are laid out from top to bottom
+- Related modules are grouped by dependency depth
+- Node labels are visible by default with semi-transparent backgrounds
 
 ## Troubleshooting
 
@@ -392,7 +392,7 @@ Edit `app/js/graph.js` and change the layout configuration:
 
 ```javascript
 layout: {
-    name: 'cose',  // Try: 'dagre', 'breadthfirst', 'concentric'
+    name: 'dagre',  // Try: 'breadthfirst', 'concentric', 'cose'
     // ... other options
 }
 ```

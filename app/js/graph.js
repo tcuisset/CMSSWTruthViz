@@ -6,12 +6,22 @@
 const GraphManager = {
     cy: null,
     fullGraph: null,
+    dagreRegistered: false,
 
     /**
      * Initialize Cytoscape graph with data
      */
     init(data) {
         console.log('Initializing graph with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
+
+        if (!this.dagreRegistered && typeof cytoscapeDagre === 'function') {
+            try {
+                cytoscape.use(cytoscapeDagre);
+                this.dagreRegistered = true;
+            } catch (error) {
+                console.warn('Could not register cytoscape-dagre; falling back to breadthfirst layout', error);
+            }
+        }
 
         // Convert data to Cytoscape format
         const elements = {
@@ -142,29 +152,7 @@ const GraphManager = {
                 }
             ],
 
-            layout: {
-                name: 'cose',
-                animate: false,
-                // Very tight spring-based physics
-                nodeRepulsion: 200000,        // Lower repulsion - nodes can get very close
-                idealEdgeLength: 40,          // Very short edges - tight connections
-                edgeElasticity: 2000,         // Very strong spring pull
-                nestingFactor: 1.2,
-                gravity: 80,                  // Strong gravity - pulls everything together
-                // Iterations for better clustering
-                numIter: 2500,                // More iterations for tight packing
-                initialTemp: 600,             // Higher initial temp for exploration
-                coolingFactor: 0.95,
-                minTemp: 1.0,
-                // Component spacing
-                componentSpacing: 80,         // Components closer together
-                // Better spring physics
-                nodeOverlap: 10,              // Allow tighter packing
-                refresh: 20,
-                fit: true,
-                padding: 30,
-                randomize: false
-            },
+            layout: this.getLayoutConfig(),
 
             minZoom: 0.1,
             maxZoom: 3,
@@ -179,6 +167,35 @@ const GraphManager = {
 
         console.log('Graph initialized successfully');
         return this.cy;
+    },
+
+    /**
+     * Prefer dagre when its extension is available, otherwise use a built-in hierarchical layout.
+     */
+    getLayoutConfig() {
+        if (this.dagreRegistered) {
+            return {
+                name: 'dagre',
+                animate: false,
+                rankDir: 'TB',
+                ranker: 'network-simplex',
+                nodeSep: 40,
+                edgeSep: 16,
+                rankSep: 90,
+                spacingFactor: 1.1,
+                fit: true,
+                padding: 30
+            };
+        }
+
+        return {
+            name: 'breadthfirst',
+            animate: false,
+            directed: true,
+            spacingFactor: 1.1,
+            fit: true,
+            padding: 30
+        };
     },
 
     /**

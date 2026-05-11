@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import subprocess
+import socket
 from pathlib import Path
 from urllib.parse import parse_qs
 import cgi
@@ -147,6 +148,12 @@ def main():
     # Change to project root directory
     project_root = Path(__file__).parent
     os.chdir(project_root)
+
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            if sock.connect_ex((HOST, PORT)) != 0:
+                break
+        PORT += 1
 
     print("=" * 60)
     print("CMSSW Module Dependency Graph Visualization Server")
