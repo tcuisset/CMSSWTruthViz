@@ -7,6 +7,7 @@ const GraphManager = {
     cy: null,
     fullGraph: null,
     dagreRegistered: false,
+    hideGenEventNodes: false,
 
     /**
      * Initialize Cytoscape graph with data
@@ -118,6 +119,12 @@ const GraphManager = {
                         'display': 'none'
                     }
                 },
+                {
+                    selector: 'node.gen-event-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
                 // Edge styles
                 {
                     selector: 'edge',
@@ -139,6 +146,12 @@ const GraphManager = {
                 // Hidden edge
                 {
                     selector: 'edge.hidden',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge.gen-event-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -186,6 +199,7 @@ const GraphManager = {
 
         // Event handlers
         this.setupEventHandlers();
+        this.setupViewOptions();
 
         console.log('Graph initialized successfully');
         return this.cy;
@@ -272,6 +286,54 @@ const GraphManager = {
                 this.clearSelection();
             }
         });
+    },
+
+    /**
+     * Setup graph-level view option controls.
+     */
+    setupViewOptions() {
+        const hideGenEventCheckbox = document.getElementById('hide-gen-event-checkbox');
+        if (!hideGenEventCheckbox) {
+            return;
+        }
+
+        hideGenEventCheckbox.checked = this.hideGenEventNodes;
+        hideGenEventCheckbox.addEventListener('change', () => {
+            this.setHideGenEventNodes(hideGenEventCheckbox.checked);
+        });
+    },
+
+    /**
+     * Toggle nodes whose DOT label contains GenEvent.
+     */
+    setHideGenEventNodes(shouldHide) {
+        this.hideGenEventNodes = shouldHide;
+        this.applyGenEventFilter();
+        this.fitVisible();
+    },
+
+    /**
+     * Apply the GenEvent view filter without disturbing focus/dependency filters.
+     */
+    applyGenEventFilter() {
+        this.cy.nodes().removeClass('gen-event-filtered');
+        this.cy.edges().removeClass('gen-event-filtered');
+
+        if (!this.hideGenEventNodes) {
+            return;
+        }
+
+        const genEventNodes = this.cy.nodes().filter(node => this.isGenEventNode(node));
+        genEventNodes.addClass('gen-event-filtered');
+        genEventNodes.connectedEdges().addClass('gen-event-filtered');
+    },
+
+    /**
+     * The source DOT label is stored as rawLabel; fall back to label for older bundles.
+     */
+    isGenEventNode(node) {
+        const labelAttribute = node.data('rawLabel') || node.data('label') || '';
+        return String(labelAttribute).includes('GenEvent');
     },
 
     /**
@@ -381,7 +443,8 @@ const GraphManager = {
     reset() {
         this.cy.nodes().removeClass('highlighted dimmed selected hidden');
         this.cy.edges().removeClass('highlighted dimmed selected hidden');
-        this.cy.fit();
+        this.applyGenEventFilter();
+        this.fitVisible();
     },
 
     /**
@@ -404,6 +467,21 @@ const GraphManager = {
      * Fit graph to viewport
      */
     fit() {
-        this.cy.fit();
+        this.fitVisible();
+    },
+
+    /**
+     * Fit to nodes still visible after all active filters.
+     */
+    fitVisible() {
+        const visibleNodes = this.cy.nodes().filter(node => {
+            return !node.hasClass('hidden') && !node.hasClass('gen-event-filtered');
+        });
+
+        if (visibleNodes.length > 0) {
+            this.cy.fit(visibleNodes);
+        } else {
+            this.cy.fit();
+        }
     }
 };
