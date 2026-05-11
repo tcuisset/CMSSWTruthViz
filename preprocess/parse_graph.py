@@ -161,6 +161,7 @@ def parse_dot_file(dot_path):
         raise ValueError(f"Failed to parse DOT file: {dot_path}")
 
     graph = graphs[0]
+    graph_name = clean_attr_value(graph.get_name() or "")
 
     # Create NetworkX graph (preserve direction if digraph)
     is_directed = graph.get_type() == "digraph"
@@ -259,6 +260,7 @@ def parse_dot_file(dot_path):
         "edges": edges,
         "labelToId": label_to_id,
         "nx_graph": G,
+        "graph_name": graph_name,
         "is_directed": is_directed
     }
 
@@ -281,6 +283,7 @@ def main():
         "nodes": result["nodes"],
         "edges": result["edges"],
         "labelToId": result["labelToId"],
+        "graph_name": result["graph_name"],
         "is_directed": result["is_directed"]
     }
 

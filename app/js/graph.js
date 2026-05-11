@@ -7,7 +7,9 @@ const GraphManager = {
     cy: null,
     fullGraph: null,
     dagreRegistered: false,
+    graphName: '',
     hideGenEventNodes: false,
+    hideSimVertexKey0Node: false,
     nodeTypeColors: {
         gen: '#2e86de',
         sim: '#e67e22',
@@ -15,7 +17,75 @@ const GraphManager = {
     },
 
     getNodeKind(ele) {
-        return String(ele.data('type') || '').trim();
+        const explicitType = String(ele.data('type') || '').trim();
+        if (explicitType) return explicitType;
+
+        if (!this.isLogicalGraph()) return '';
+
+        const logicalFlags = this.getLogicalFlags(ele);
+        const isVertex = this.isLogicalVertex(ele);
+
+        if (logicalFlags.hasGen && logicalFlags.hasSim) {
+            return isVertex ? 'GenSimVertex' : 'GenSimParticle';
+        }
+        if (logicalFlags.hasGen) {
+            return isVertex ? 'GenVertex' : 'GenParticle';
+        }
+        if (logicalFlags.hasSim) {
+            return isVertex ? 'SimVertex' : 'SimTrack';
+        }
+
+        return isVertex ? 'LogicalVertex' : 'LogicalParticle';
+    },
+
+    isLogicalGraph() {
+        return this.graphName === 'TruthLogicalGraph';
+    },
+
+    isTruthyAttribute(value) {
+        if (value === true || value === 1) return true;
+        if (value === false || value === 0 || value === null || value === undefined) return false;
+
+        const normalized = String(value).trim().toLowerCase();
+        return normalized === '1' || normalized === 'true' || normalized === 'yes';
+    },
+
+    extractLogicalFlagFromText(ele, key) {
+        const text = `${ele.data('rawLabel') || ''}\n${ele.data('detailLabel') || ''}`;
+        const match = text.match(new RegExp(`${key}\\s*:\\s*(yes|no|true|false|1|0)`, 'i'));
+        return match ? this.isTruthyAttribute(match[1]) : false;
+    },
+
+    getLogicalFlags(ele) {
+        const hasGenAttribute = ele.data('hasGen');
+        const hasSimAttribute = ele.data('hasSim');
+
+        let hasGen = hasGenAttribute !== undefined
+            ? this.isTruthyAttribute(hasGenAttribute)
+            : this.extractLogicalFlagFromText(ele, 'hasGen');
+        let hasSim = hasSimAttribute !== undefined
+            ? this.isTruthyAttribute(hasSimAttribute)
+            : this.extractLogicalFlagFromText(ele, 'hasSim');
+
+        if (!hasGen && !hasSim) {
+            const domainText = `${ele.data('rawLabel') || ''}\n${ele.data('detailLabel') || ''}`;
+            if (/domain\s*:\s*GEN/i.test(domainText)) hasGen = true;
+            if (/domain\s*:\s*SIM/i.test(domainText)) hasSim = true;
+        }
+
+        return { hasGen, hasSim };
+    },
+
+    isLogicalGenSimNode(ele) {
+        if (!this.isLogicalGraph()) return false;
+
+        const logicalFlags = this.getLogicalFlags(ele);
+        return logicalFlags.hasGen && logicalFlags.hasSim;
+    },
+
+    isLogicalVertex(ele) {
+        const shape = String(ele.data('shape') || '').trim();
+        return shape === 'diamond' || /^v\d+$/.test(ele.id());
     },
 
     hasCrossedBoundary(ele) {
@@ -25,6 +95,7 @@ const GraphManager = {
 
     getNodeFillColor(ele) {
         const type = this.getNodeKind(ele);
+        if (type.startsWith('GenSim')) return this.nodeTypeColors.gen;
         if (type === 'GenEvent') return this.nodeTypeColors.event;
         if (type.startsWith('Gen')) return this.nodeTypeColors.gen;
         if (type.startsWith('Sim')) return this.nodeTypeColors.sim;
@@ -38,8 +109,8 @@ const GraphManager = {
     getNodeShape(ele) {
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 'star';
-        if (type === 'GenVertex' || type === 'SimVertex') return 'diamond';
-        if (type === 'GenParticle' || type === 'SimTrack') return 'rectangle';
+        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 'diamond';
+        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return 'rectangle';
 
         const shape = ele.data('shape');
         if (shape === 'diamond') return 'diamond';
@@ -50,19 +121,22 @@ const GraphManager = {
     getNodeSize(ele) {
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 88;
-        if (type === 'GenVertex' || type === 'SimVertex') return 52;
-        if (type === 'GenParticle' || type === 'SimTrack') return 74;
+        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 52;
+        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return 74;
         return 'label';
     },
 
     getNodeBorderColor(ele) {
         if (this.hasCrossedBoundary(ele)) return '#c0392b';
+        if (this.isLogicalGenSimNode(ele)) return this.nodeTypeColors.sim;
+        if (this.isLogicalGraph()) return '#34495e';
 
         const color = ele.data('color');
         return color || '#34495e';
     },
 
     getNodeBorderWidth(ele) {
+        if (this.isLogicalGenSimNode(ele)) return 5;
         return this.hasCrossedBoundary(ele) ? 5 : 2;
     },
 
@@ -71,6 +145,7 @@ const GraphManager = {
      */
     init(data) {
         console.log('Initializing graph with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
+        this.graphName = data.metadata?.graph_name || data.graph_name || '';
 
         if (!this.dagreRegistered && typeof cytoscapeDagre === 'function') {
             try {
@@ -142,7 +217,7 @@ const GraphManager = {
                             return GraphManager.getNodeSize(ele);
                         },
                         'border-style': function(ele) {
-                            return GraphManager.hasCrossedBoundary(ele) ? 'double' : 'solid';
+                            return GraphManager.hasCrossedBoundary(ele) || GraphManager.isLogicalGenSimNode(ele) ? 'double' : 'solid';
                         }
                     }
                 },
@@ -184,6 +259,12 @@ const GraphManager = {
                         'display': 'none'
                     }
                 },
+                {
+                    selector: 'node.sim-vertex-key0-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
                 // Edge styles
                 {
                     selector: 'edge',
@@ -211,6 +292,12 @@ const GraphManager = {
                 },
                 {
                     selector: 'edge.gen-event-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge.sim-vertex-key0-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -352,14 +439,20 @@ const GraphManager = {
      */
     setupViewOptions() {
         const hideGenEventCheckbox = document.getElementById('hide-gen-event-checkbox');
-        if (!hideGenEventCheckbox) {
-            return;
+        if (hideGenEventCheckbox) {
+            hideGenEventCheckbox.checked = this.hideGenEventNodes;
+            hideGenEventCheckbox.addEventListener('change', () => {
+                this.setHideGenEventNodes(hideGenEventCheckbox.checked);
+            });
         }
 
-        hideGenEventCheckbox.checked = this.hideGenEventNodes;
-        hideGenEventCheckbox.addEventListener('change', () => {
-            this.setHideGenEventNodes(hideGenEventCheckbox.checked);
-        });
+        const hideSimVertexKey0Checkbox = document.getElementById('hide-simvertex-key0-checkbox');
+        if (hideSimVertexKey0Checkbox) {
+            hideSimVertexKey0Checkbox.checked = this.hideSimVertexKey0Node;
+            hideSimVertexKey0Checkbox.addEventListener('change', () => {
+                this.setHideSimVertexKey0Node(hideSimVertexKey0Checkbox.checked);
+            });
+        }
     },
 
     /**
@@ -393,6 +486,40 @@ const GraphManager = {
     isGenEventNode(node) {
         const labelAttribute = node.data('rawLabel') || node.data('label') || '';
         return String(labelAttribute).includes('GenEvent');
+    },
+
+    /**
+     * Hide the SimVertex whose source label contains key=0.
+     */
+    setHideSimVertexKey0Node(shouldHide) {
+        this.hideSimVertexKey0Node = shouldHide;
+        this.applySimVertexKey0Filter();
+        this.fitVisible();
+    },
+
+    /**
+     * Apply the SimVertex key=0 view filter without disturbing focus/dependency filters.
+     */
+    applySimVertexKey0Filter() {
+        this.cy.nodes().removeClass('sim-vertex-key0-filtered');
+        this.cy.edges().removeClass('sim-vertex-key0-filtered');
+
+        if (!this.hideSimVertexKey0Node) {
+            return;
+        }
+
+        const simVertexKey0Nodes = this.cy.nodes().filter(node => this.isSimVertexKey0Node(node));
+        simVertexKey0Nodes.addClass('sim-vertex-key0-filtered');
+        simVertexKey0Nodes.connectedEdges().addClass('sim-vertex-key0-filtered');
+    },
+
+    /**
+     * The source DOT label is stored as rawLabel; fall back to label for older bundles.
+     */
+    isSimVertexKey0Node(node) {
+        const labelAttribute = node.data('rawLabel') || node.data('label') || '';
+        const label = String(labelAttribute);
+        return label.includes('SimVertex') && /\bkey=0\b/.test(label);
     },
 
     /**
@@ -503,6 +630,7 @@ const GraphManager = {
         this.cy.nodes().removeClass('highlighted dimmed selected hidden');
         this.cy.edges().removeClass('highlighted dimmed selected hidden');
         this.applyGenEventFilter();
+        this.applySimVertexKey0Filter();
         this.fitVisible();
     },
 
@@ -534,7 +662,9 @@ const GraphManager = {
      */
     fitVisible() {
         const visibleNodes = this.cy.nodes().filter(node => {
-            return !node.hasClass('hidden') && !node.hasClass('gen-event-filtered');
+            return !node.hasClass('hidden')
+                && !node.hasClass('gen-event-filtered')
+                && !node.hasClass('sim-vertex-key0-filtered');
         });
 
         if (visibleNodes.length > 0) {

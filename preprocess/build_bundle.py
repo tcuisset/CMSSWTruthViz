@@ -26,6 +26,7 @@ def build_bundle(dot_path, output_path):
         "edges": graph_data["edges"],
         "labelToId": graph_data["labelToId"],
         "metadata": {
+            "graph_name": graph_data["graph_name"],
             "is_directed": graph_data["is_directed"],
             "node_count": len(graph_data["nodes"]),
             "edge_count": len(graph_data["edges"])
