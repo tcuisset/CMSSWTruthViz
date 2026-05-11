@@ -8,6 +8,63 @@ const GraphManager = {
     fullGraph: null,
     dagreRegistered: false,
     hideGenEventNodes: false,
+    nodeTypeColors: {
+        gen: '#2e86de',
+        sim: '#e67e22',
+        event: '#f1c40f'
+    },
+
+    getNodeKind(ele) {
+        return String(ele.data('type') || '').trim();
+    },
+
+    hasCrossedBoundary(ele) {
+        const value = ele.data('crossedBoundary');
+        return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+    },
+
+    getNodeFillColor(ele) {
+        const type = this.getNodeKind(ele);
+        if (type === 'GenEvent') return this.nodeTypeColors.event;
+        if (type.startsWith('Gen')) return this.nodeTypeColors.gen;
+        if (type.startsWith('Sim')) return this.nodeTypeColors.sim;
+
+        const fillcolor = ele.data('fillcolor');
+        if (fillcolor === 'green') return '#2ecc71';
+        if (fillcolor === 'lightgrey') return '#d3d3d3';
+        return '#3498db';
+    },
+
+    getNodeShape(ele) {
+        const type = this.getNodeKind(ele);
+        if (type === 'GenEvent') return 'star';
+        if (type === 'GenVertex' || type === 'SimVertex') return 'diamond';
+        if (type === 'GenParticle' || type === 'SimTrack') return 'rectangle';
+
+        const shape = ele.data('shape');
+        if (shape === 'diamond') return 'diamond';
+        if (shape === 'box') return 'rectangle';
+        return 'rectangle';
+    },
+
+    getNodeSize(ele) {
+        const type = this.getNodeKind(ele);
+        if (type === 'GenEvent') return 88;
+        if (type === 'GenVertex' || type === 'SimVertex') return 52;
+        if (type === 'GenParticle' || type === 'SimTrack') return 74;
+        return 'label';
+    },
+
+    getNodeBorderColor(ele) {
+        if (this.hasCrossedBoundary(ele)) return '#c0392b';
+
+        const color = ele.data('color');
+        return color || '#34495e';
+    },
+
+    getNodeBorderWidth(ele) {
+        return this.hasCrossedBoundary(ele) ? 5 : 2;
+    },
 
     /**
      * Initialize Cytoscape graph with data
@@ -53,8 +110,6 @@ const GraphManager = {
                 {
                     selector: 'node',
                     style: {
-                        'width': 'label',
-                        'height': 'label',
                         'padding': 10,
                         'label': 'data(label)',
                         'text-valign': 'center',
@@ -69,21 +124,25 @@ const GraphManager = {
                         'text-background-padding': 2,
                         'text-background-shape': 'roundrectangle',
                         'background-color': function(ele) {
-                            const fillcolor = ele.data('fillcolor');
-                            if (fillcolor === 'green') return '#2ecc71';
-                            if (fillcolor === 'lightgrey') return '#d3d3d3';
-                            return '#3498db';
+                            return GraphManager.getNodeFillColor(ele);
                         },
-                        'border-width': 2,
+                        'border-width': function(ele) {
+                            return GraphManager.getNodeBorderWidth(ele);
+                        },
                         'border-color': function(ele) {
-                            const color = ele.data('color');
-                            return color || '#34495e';
+                            return GraphManager.getNodeBorderColor(ele);
                         },
                         'shape': function(ele) {
-                            const shape = ele.data('shape');
-                            if (shape === 'diamond') return 'diamond';
-                            if (shape === 'box') return 'rectangle';
-                            return 'rectangle';
+                            return GraphManager.getNodeShape(ele);
+                        },
+                        'width': function(ele) {
+                            return GraphManager.getNodeSize(ele);
+                        },
+                        'height': function(ele) {
+                            return GraphManager.getNodeSize(ele);
+                        },
+                        'border-style': function(ele) {
+                            return GraphManager.hasCrossedBoundary(ele) ? 'double' : 'solid';
                         }
                     }
                 },

@@ -11,7 +11,6 @@ import os
 import sys
 import json
 import subprocess
-import socket
 from pathlib import Path
 from urllib.parse import parse_qs
 import cgi
@@ -133,33 +132,46 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), format % args))
 
 
+class ReusableTCPServer(socketserver.TCPServer):
+    """TCP server that can restart quickly after a local development run."""
+
+    allow_reuse_address = True
+
+
+def create_server(host, start_port, handler, max_attempts=100):
+    """Bind to the first available port at or above start_port."""
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            return port, ReusableTCPServer((host, port), handler)
+        except OSError as exc:
+            if exc.errno not in {48, 98}:  # EADDRINUSE on macOS/BSD and Linux
+                raise
+
+    end_port = start_port + max_attempts - 1
+    raise RuntimeError(f"No available port found from {start_port} to {end_port}")
+
+
 def main():
-    PORT = 8009
+    START_PORT = 8009
     HOST = 'localhost'
 
     # Change to project root directory
     project_root = Path(__file__).parent
     os.chdir(project_root)
 
-    while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.2)
-            if sock.connect_ex((HOST, PORT)) != 0:
-                break
-        PORT += 1
+    port, httpd = create_server(HOST, START_PORT, CORSRequestHandler)
 
     print("=" * 60)
     print("Truth Graph Viewer Server")
     print("=" * 60)
     print(f"\nServing from: {project_root}")
-    print(f"Server address: http://{HOST}:{PORT}")
-    print(f"Application URL: http://{HOST}:{PORT}/app/")
+    print(f"Server address: http://{HOST}:{port}")
+    print(f"Application URL: http://{HOST}:{port}/app/")
     print("\nPress Ctrl+C to stop the server")
     print("=" * 60)
     print()
 
-    # Create server
-    with socketserver.TCPServer((HOST, PORT), CORSRequestHandler) as httpd:
+    with httpd:
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

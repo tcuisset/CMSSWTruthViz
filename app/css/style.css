@@ -213,6 +213,18 @@ body {
     flex-shrink: 0;
 }
 
+.legend-diamond {
+    transform: rotate(45deg) scale(0.82);
+}
+
+.legend-star {
+    clip-path: polygon(50% 0%, 61% 34%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 34%);
+}
+
+.legend-crossed {
+    border: 4px double #c0392b;
+}
+
 .legend-shape {
     width: 20px;
     height: 20px;
