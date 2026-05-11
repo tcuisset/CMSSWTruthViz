@@ -233,12 +233,8 @@ const KeyboardNav = {
      * Select a specific node
      */
     selectNode(node) {
-        // Clear previous selection
-        GraphManager.cy.nodes().removeClass('selected');
-
-        // Select new node
         this.selectedNode = node;
-        node.addClass('selected');
+        GraphManager.applySelection(node);
 
         // Center on node
         GraphManager.cy.animate({

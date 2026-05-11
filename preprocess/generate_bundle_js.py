@@ -26,7 +26,6 @@ def generate_bundle_js(json_path, output_path):
     print(f"  Size: {json_size:,} bytes ({json_size/1024/1024:.2f} MB)")
     print(f"  Nodes: {len(bundle_data['nodes']):,}")
     print(f"  Edges: {len(bundle_data['edges']):,}")
-    print(f"  Modules: {len(bundle_data.get('modules', {})):,}")
 
     # Generate JavaScript file
     print(f"\nGenerating: {output_path}")
@@ -45,8 +44,7 @@ window.EMBEDDED_BUNDLE_DATA = {json.dumps(bundle_data, separators=(',', ':'), en
 
 console.log('Embedded bundle data loaded:', {{
     nodes: window.EMBEDDED_BUNDLE_DATA.nodes.length,
-    edges: window.EMBEDDED_BUNDLE_DATA.edges.length,
-    modules: Object.keys(window.EMBEDDED_BUNDLE_DATA.modules || {{}}).length
+    edges: window.EMBEDDED_BUNDLE_DATA.edges.length
 }});
 """
 

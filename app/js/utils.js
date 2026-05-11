@@ -1,5 +1,5 @@
 /**
- * Utility functions for the CMSSW Graph Visualization
+ * Utility functions for the truth graph viewer
  */
 
 const Utils = {
@@ -13,22 +13,11 @@ const Utils = {
     },
 
     /**
-     * Format InputTag for display
-     */
-    formatInputTag(tag) {
-        let parts = [tag.module];
-        if (tag.instance) parts.push(tag.instance);
-        if (tag.process) parts.push(tag.process);
-        return parts.join(':');
-    },
-
-    /**
      * Update statistics display
      */
-    updateStats(nodeCount, edgeCount, moduleCount) {
+    updateStats(nodeCount, edgeCount) {
         document.getElementById('node-count').textContent = `Nodes: ${nodeCount.toLocaleString()}`;
         document.getElementById('edge-count').textContent = `Edges: ${edgeCount.toLocaleString()}`;
-        document.getElementById('module-count').textContent = `Modules: ${moduleCount.toLocaleString()}`;
     },
 
     /**

@@ -31,49 +31,18 @@
 
                 <div class="control-group" id="dependency-controls">
                     <label>Links:</label>
-                    <span id="selected-module-name" style="color: #ecf0f1; font-weight: 600;">None selected</span>
+                    <span id="selected-node-name" style="color: #ecf0f1; font-weight: 600;">None selected</span>
                     <label for="dep-depth">Depth:</label>
                     <input type="number" id="dep-depth" min="1" max="10" value="1" style="width: 60px;" />
-                    <button id="dep-paths-btn" title="Direct upstream + downstream paths (no cross-connections)">Paths</button>
-                    <button id="dep-upstream-btn" title="Show what this module depends on (inputs/sources)">Upstream</button>
-                    <button id="dep-downstream-btn" title="Show what depends on this module (consumers)">Downstream</button>
+                    <button id="dep-upstream-btn" title="Show source-side links">Upstream</button>
+                    <button id="dep-downstream-btn" title="Show target-side links">Downstream</button>
                     <button id="dep-show-btn" title="All edges between nodes in dependency tree (includes cross-connections)">Both</button>
-                </div>
-            </div>
-
-            <div class="controls-section" id="filter-controls-wrapper">
-                <div class="control-group" id="filter-controls">
-                    <label>Filters:</label>
-
-                    <div class="filter-category">
-                        <strong>Stage:</strong>
-                        <label><input type="checkbox" id="filter-reco" checked> Reco</label>
-                        <label><input type="checkbox" id="filter-analysis" checked> Analysis</label>
-                    </div>
-
-                    <div class="filter-category">
-                        <strong>Specific:</strong>
-                        <label><input type="checkbox" id="filter-pat" checked> PAT</label>
-                        <label><input type="checkbox" id="filter-hlt" checked> HLT</label>
-                    </div>
-
-                    <div class="filter-category">
-                        <strong>Type:</strong>
-                        <label><input type="checkbox" id="filter-producer" checked> Producer</label>
-                        <label><input type="checkbox" id="filter-filter" checked> Filter</label>
-                        <label><input type="checkbox" id="filter-analyzer" checked> Analyzer</label>
-                    </div>
-
-                    <button id="filter-select-all" class="filter-btn">All</button>
-                    <button id="filter-deselect-all" class="filter-btn">None</button>
-                    <span id="filter-stats" class="filter-stats">Showing all nodes</span>
                 </div>
             </div>
 
             <div class="controls-section" id="stats">
                 <span id="node-count">Nodes: -</span>
                 <span id="edge-count">Edges: -</span>
-                <span id="module-count">Modules: -</span>
                 <button id="upload-btn" style="margin-left: 20px;">Upload Files</button>
             </div>
         </div>
@@ -117,29 +86,24 @@
                 </div>
 
                 <div id="panel-content">
-                    <div id="module-info">
-                        <h2 id="module-name">Module Name</h2>
+                    <div id="node-info">
+                        <h2 id="node-name">Node</h2>
                         <div class="info-section">
-                            <strong>Type:</strong> <span id="module-type">-</span>
+                            <strong>Shape:</strong> <span id="node-shape">-</span>
                         </div>
                         <div class="info-section">
-                            <strong>ID:</strong> <span id="module-plugin">-</span>
+                            <strong>ID:</strong> <span id="node-id">-</span>
                         </div>
-                    </div>
-
-                    <div id="input-tags-section" class="section">
-                        <h3>Input Tags</h3>
-                        <div id="input-tags-list"></div>
                     </div>
 
                     <div id="parameters-section" class="section">
-                        <h3>Parameters</h3>
+                        <h3>DOT Attributes</h3>
                         <div id="parameters-list"></div>
                     </div>
 
                     <div id="raw-snippet-section" class="section">
-                        <h3>Raw DOT Label</h3>
-                        <pre id="raw-snippet"></pre>
+                        <h3>Rendered DOT Label</h3>
+                        <div id="raw-snippet"></div>
                     </div>
                 </div>
             </div>
@@ -154,17 +118,12 @@
                 <button id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Upload a DOT graph to regenerate the bundle. A CMSSW config file is optional.</p>
+                <p>Upload a DOT graph to regenerate the bundle.</p>
                 <form id="upload-form">
                     <div class="form-group">
                         <label for="dot-file-input">Graph (truthgraph.dot):</label>
                         <input type="file" id="dot-file-input" accept=".gv,.dot" required>
                         <span class="file-info" id="dot-file-info">No file selected</span>
-                    </div>
-                    <div class="form-group">
-                        <label for="config-file-input">CMSSW Config (optional):</label>
-                        <input type="file" id="config-file-input" accept=".py">
-                        <span class="file-info" id="config-file-info">No file selected</span>
                     </div>
                     <div class="form-actions">
                         <button type="submit" id="upload-submit-btn">Upload & Regenerate</button>
@@ -197,7 +156,6 @@
     <script src="js/ego.js"></script>
     <script src="js/dependency.js"></script>
     <script src="js/keyboard.js"></script>
-    <script src="js/filter.js"></script>
     <script src="js/upload.js"></script>
     <script src="js/main.js"></script>
 </body>

@@ -34,18 +34,17 @@ const EgoGraphManager = {
     apply() {
         const radius = parseInt(this.radiusInput.value);
 
-        if (!PanelManager.currentModule) {
-            alert('Please select a module first');
+        if (!PanelManager.currentNode) {
+            alert('Please select a node first');
             return;
         }
 
         console.log('Applying ego graph with radius:', radius);
 
-        // Find the current module's node
-        const nodes = GraphManager.getNodeByLabel(PanelManager.currentModule);
+        const nodes = GraphManager.getNodeByLabel(PanelManager.currentNode);
 
         if (nodes.length === 0) {
-            alert('Current module not found in graph');
+            alert('Current node not found in graph');
             return;
         }
 

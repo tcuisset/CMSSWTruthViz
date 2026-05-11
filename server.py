@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple HTTP server for the CMSSW Graph Visualization app.
+Simple HTTP server for the truth graph viewer.
 Serves static files with proper CORS headers for local development.
 Handles DOT file uploads and bundle regeneration.
 """
@@ -58,7 +58,6 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Get uploaded files
             dot_file = form['dotFile'].file if 'dotFile' in form else None
-            config_file = form['configFile'].file if 'configFile' in form else None
 
             if not dot_file:
                 self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
@@ -69,26 +68,19 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Save files
             dot_path = project_root / "truthgraph.dot"
-            config_path = project_root / "dumpConfig.py"
 
-            print(f"\nSaving uploaded files...")
+            print("\nSaving uploaded file...")
             with open(dot_path, 'wb') as f:
                 f.write(dot_file.read())
             print(f"  Saved: {dot_path}")
 
-            if config_file:
-                with open(config_path, 'wb') as f:
-                    f.write(config_file.read())
-                print(f"  Saved: {config_path}")
-
             # Run bundle generation
-            print(f"\nRegenerating bundle...")
+            print("\nRegenerating bundle...")
             build_script = project_root / "preprocess" / "build_bundle.py"
             build_args = [
                 sys.executable,
                 str(build_script),
                 str(dot_path),
-                str(config_path) if config_file else "",
                 str(project_root / "data" / "bundle.json")
             ]
 
@@ -142,7 +134,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def main():
-    PORT = 8005
+    PORT = 8009
     HOST = 'localhost'
 
     # Change to project root directory
@@ -151,12 +143,13 @@ def main():
 
     while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.2)
             if sock.connect_ex((HOST, PORT)) != 0:
                 break
         PORT += 1
 
     print("=" * 60)
-    print("CMSSW Module Dependency Graph Visualization Server")
+    print("Truth Graph Viewer Server")
     print("=" * 60)
     print(f"\nServing from: {project_root}")
     print(f"Server address: http://{HOST}:{PORT}")

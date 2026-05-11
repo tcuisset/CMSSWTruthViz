@@ -149,6 +149,28 @@ const GraphManager = {
                     style: {
                         'opacity': 0.2
                     }
+                },
+                // Highlighted edge
+                {
+                    selector: 'edge.highlighted',
+                    style: {
+                        'width': 3,
+                        'line-color': '#e74c3c',
+                        'target-arrow-color': '#e74c3c',
+                        'arrow-scale': 1.6,
+                        'z-index': 9997
+                    }
+                },
+                // Selected edge
+                {
+                    selector: 'edge.selected',
+                    style: {
+                        'width': 3,
+                        'line-color': '#f39c12',
+                        'target-arrow-color': '#f39c12',
+                        'arrow-scale': 1.6,
+                        'z-index': 9996
+                    }
                 }
             ],
 
@@ -202,14 +224,14 @@ const GraphManager = {
      * Setup event handlers for graph interactions
      */
     setupEventHandlers() {
-        // Node click - open panel and select the module
+        // Node click - open panel and select the node
         this.cy.on('tap', 'node', (evt) => {
             const node = evt.target;
-            const moduleId = node.id();
+            const nodeId = node.id();
             const label = node.data('label');
 
             console.log('Node clicked:', label);
-            PanelManager.open(label, moduleId);
+            PanelManager.open(label, nodeId);
         });
 
         // Edge click - jump to the endpoint furthest from the current view center.
@@ -260,6 +282,7 @@ const GraphManager = {
         const node = this.cy.getElementById(nodeId);
         if (node.length > 0) {
             node.addClass('highlighted');
+            node.connectedEdges().addClass('highlighted');
             this.cy.animate({
                 center: { eles: node },
                 zoom: 1.5
@@ -275,9 +298,7 @@ const GraphManager = {
      * Select and center the graph on a node.
      */
     focusNode(node) {
-        this.cy.nodes().removeClass('selected');
-        node.addClass('selected');
-        KeyboardNav.selectedNode = node;
+        this.applySelection(node);
 
         this.cy.animate({
             center: { eles: node },
@@ -285,6 +306,17 @@ const GraphManager = {
         }, {
             duration: 300
         });
+    },
+
+    /**
+     * Mark a node and its connected arrows as selected.
+     */
+    applySelection(node) {
+        this.cy.nodes().removeClass('selected');
+        this.cy.edges().removeClass('selected');
+        node.addClass('selected');
+        node.connectedEdges().addClass('selected');
+        KeyboardNav.selectedNode = node;
     },
 
     /**
@@ -331,7 +363,7 @@ const GraphManager = {
      */
     clearHighlight() {
         this.cy.nodes().removeClass('highlighted dimmed');
-        this.cy.edges().removeClass('dimmed');
+        this.cy.edges().removeClass('highlighted dimmed');
     },
 
     /**
@@ -339,6 +371,7 @@ const GraphManager = {
      */
     clearSelection() {
         this.cy.nodes().removeClass('selected');
+        this.cy.edges().removeClass('selected');
         KeyboardNav.selectedNode = null;
     },
 
@@ -347,7 +380,7 @@ const GraphManager = {
      */
     reset() {
         this.cy.nodes().removeClass('highlighted dimmed selected hidden');
-        this.cy.edges().removeClass('dimmed hidden');
+        this.cy.edges().removeClass('highlighted dimmed selected hidden');
         this.cy.fit();
     },
 

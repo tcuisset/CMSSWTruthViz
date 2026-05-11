@@ -6,10 +6,9 @@
 const DependencyExplorer = {
     depthInput: null,
     showBtn: null,
-    pathsBtn: null,
     upstreamBtn: null,
     downstreamBtn: null,
-    selectedModuleName: null,
+    selectedNodeName: null,
 
     /**
      * Initialize dependency explorer
@@ -17,10 +16,9 @@ const DependencyExplorer = {
     init() {
         this.depthInput = document.getElementById('dep-depth');
         this.showBtn = document.getElementById('dep-show-btn');
-        this.pathsBtn = document.getElementById('dep-paths-btn');
         this.upstreamBtn = document.getElementById('dep-upstream-btn');
         this.downstreamBtn = document.getElementById('dep-downstream-btn');
-        this.selectedModuleName = document.getElementById('selected-module-name');
+        this.selectedNodeName = document.getElementById('selected-node-name');
 
         this.setupEventListeners();
     },
@@ -29,14 +27,13 @@ const DependencyExplorer = {
      * Setup event listeners
      */
     setupEventListeners() {
-        this.pathsBtn.addEventListener('click', () => this.show('paths'));
         this.upstreamBtn.addEventListener('click', () => this.show('upstream'));
         this.downstreamBtn.addEventListener('click', () => this.show('downstream'));
         this.showBtn.addEventListener('click', () => this.show('both'));
 
-        // Update selected module name when panel opens
+        // Update selected node name when panel opens
         document.addEventListener('panelOpened', (e) => {
-            this.selectedModuleName.textContent = e.detail.moduleName || 'None selected';
+            this.selectedNodeName.textContent = e.detail.nodeName || 'None selected';
         });
     },
 
@@ -46,18 +43,17 @@ const DependencyExplorer = {
     show(direction) {
         const depth = parseInt(this.depthInput.value);
 
-        if (!PanelManager.currentModule) {
-            alert('Please select a module first');
+        if (!PanelManager.currentNode) {
+            alert('Please select a node first');
             return;
         }
 
         console.log(`Showing ${direction} dependencies with depth:`, depth);
 
-        // Find the current module's node
-        const nodes = GraphManager.getNodeByLabel(PanelManager.currentModule);
+        const nodes = GraphManager.getNodeByLabel(PanelManager.currentNode);
 
         if (nodes.length === 0) {
-            alert('Current module not found in graph');
+            alert('Current node not found in graph');
             return;
         }
 
@@ -98,17 +94,6 @@ const DependencyExplorer = {
      * Get dependencies using BFS
      */
     getDependencies(centerNode, depth, direction) {
-        // For 'paths' mode, get upstream and downstream separately and combine
-        if (direction === 'paths') {
-            const upstream = this.getDependencies(centerNode, depth, 'upstream');
-            const downstream = this.getDependencies(centerNode, depth, 'downstream');
-
-            return {
-                nodes: upstream.nodes.union(downstream.nodes),
-                edges: upstream.edges.union(downstream.edges)
-            };
-        }
-
         const visited = new Set([centerNode.id()]);
         const nodes = GraphManager.cy.collection().union(centerNode);
         const edges = GraphManager.cy.collection();
@@ -122,13 +107,10 @@ const DependencyExplorer = {
                 let neighbors;
 
                 if (direction === 'upstream') {
-                    // Upstream: what this module depends on (its dependencies/sources)
                     neighbors = node.outgoers('node');
                 } else if (direction === 'downstream') {
-                    // Downstream: what depends on this module (its consumers/dependents)
                     neighbors = node.incomers('node');
                 } else {
-                    // Both directions (includes cross-connections)
                     neighbors = node.neighborhood('node');
                 }
 
@@ -144,17 +126,14 @@ const DependencyExplorer = {
                 let connectedEdges;
 
                 if (direction === 'upstream') {
-                    // Upstream: edges pointing FROM this node TO dependencies
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return edge.source().id() === node.id() && visited.has(edge.target().id());
                     });
                 } else if (direction === 'downstream') {
-                    // Downstream: edges pointing TO this node FROM dependents
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return edge.target().id() === node.id() && visited.has(edge.source().id());
                     });
                 } else {
-                    // Both: include ALL edges between visited nodes (cross-connections)
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return visited.has(edge.source().id()) && visited.has(edge.target().id());
                     });
@@ -177,12 +156,12 @@ const DependencyExplorer = {
 // Custom event for panel opening
 document.addEventListener('DOMContentLoaded', () => {
     const originalOpen = PanelManager.open;
-    PanelManager.open = function(moduleName, nodeId) {
-        originalOpen.call(this, moduleName, nodeId);
+    PanelManager.open = function(nodeName, nodeId) {
+        originalOpen.call(this, nodeName, nodeId);
 
         // Dispatch custom event
         const event = new CustomEvent('panelOpened', {
-            detail: { moduleName, nodeId }
+            detail: { nodeName, nodeId }
         });
         document.dispatchEvent(event);
     };

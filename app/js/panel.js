@@ -1,12 +1,12 @@
 /**
- * panel.js - Side panel with module details
+ * panel.js - Side panel with DOT node details
  * Handles panel display, navigation, and resizing
  */
 
 const PanelManager = {
     panel: null,
     history: [],
-    currentModule: null,
+    currentNode: null,
     isResizing: false,
     startX: 0,
     startWidth: 0,
@@ -89,67 +89,29 @@ const PanelManager = {
     },
 
     /**
-     * Open panel with module details
+     * Open panel with node details
      */
-    open(moduleName, nodeId) {
-        this.currentModule = moduleName;
+    open(nodeName, nodeId) {
+        this.currentNode = nodeName;
 
         // Add to history if different from current
-        if (this.history.length === 0 || this.history[this.history.length - 1] !== moduleName) {
-            this.history.push(moduleName);
+        if (this.history.length === 0 || this.history[this.history.length - 1] !== nodeName) {
+            this.history.push(nodeName);
         }
 
-        // Get module data
-        const moduleData = window.bundleData.modules?.[moduleName];
-
-        if (!moduleData) {
-            const nodeData = GraphManager.getBundleNode(nodeId);
-            if (nodeData) {
-                this.displayNode(nodeData);
-                this.updateBreadcrumbs();
-                this.panel.classList.remove('hidden');
-
-                if (nodeId) {
-                    GraphManager.highlightNode(nodeId);
-                }
-                return;
-            }
-
-            this.displayError(moduleName);
-        } else {
-            // Display module info
-            this.displayModule(moduleName, moduleData, nodeId);
-
-            // Update breadcrumbs
+        const nodeData = GraphManager.getBundleNode(nodeId);
+        if (nodeData) {
+            this.displayNode(nodeData);
             this.updateBreadcrumbs();
-
-            // Show panel
             this.panel.classList.remove('hidden');
 
-            // Highlight node in graph
             if (nodeId) {
                 GraphManager.highlightNode(nodeId);
             }
+            return;
         }
-    },
 
-    /**
-     * Display module information
-     */
-    displayModule(moduleName, moduleData, nodeId) {
-        // Basic info
-        document.getElementById('module-name').textContent = moduleName;
-        document.getElementById('module-type').textContent = moduleData.type || 'N/A';
-        document.getElementById('module-plugin').textContent = moduleData.plugin || 'N/A';
-
-        // Input tags
-        this.displayInputTags(moduleData.inputTags || []);
-
-        // Parameters
-        this.displayParameters(moduleData.parameters || {}, moduleData.inputTags || []);
-
-        // Raw snippet
-        document.getElementById('raw-snippet').textContent = moduleData.rawSnippet || 'No configuration available';
+        this.displayError(nodeName);
     },
 
     /**
@@ -157,11 +119,9 @@ const PanelManager = {
      */
     displayNode(nodeData) {
         const title = (nodeData.detailLabel || nodeData.label || nodeData.id).split('\n')[0];
-        document.getElementById('module-name').textContent = title;
-        document.getElementById('module-type').textContent = nodeData.shape || 'DOT node';
-        document.getElementById('module-plugin').textContent = nodeData.id;
-
-        document.getElementById('input-tags-list').innerHTML = '<div class="empty-state">No CMSSW input tags for this graph</div>';
+        document.getElementById('node-name').textContent = title;
+        document.getElementById('node-shape').textContent = nodeData.shape || 'DOT node';
+        document.getElementById('node-id').textContent = nodeData.id;
 
         const ignoredKeys = new Set(['id', 'label', 'displayLabel', 'detailLabel', 'rawLabel']);
         const parameters = {};
@@ -169,150 +129,127 @@ const PanelManager = {
         Object.keys(nodeData).forEach(key => {
             if (!ignoredKeys.has(key) && nodeData[key] !== undefined && nodeData[key] !== null) {
                 parameters[key] = {
-                    type: 'DOT attribute',
+                    type: 'attribute',
                     value: String(nodeData[key])
                 };
             }
         });
 
-        this.displayParameters(parameters, []);
+        this.displayParameters(parameters);
 
-        const rawLines = [];
-        if (nodeData.rawLabel) {
-            rawLines.push('raw label:');
-            rawLines.push(nodeData.rawLabel);
-            rawLines.push('');
-        }
-
-        rawLines.push('display label:');
-        rawLines.push(nodeData.detailLabel || nodeData.label || nodeData.id);
-
-        document.getElementById('raw-snippet').textContent = rawLines.join('\n');
+        this.displayRawDotLabel(nodeData);
     },
 
     /**
-     * Display input tags with VInputTag grouping
+     * Render DOT HTML-like labels as actual HTML, with a text fallback.
      */
-    displayInputTags(inputTags) {
-        const container = document.getElementById('input-tags-list');
+    displayRawDotLabel(nodeData) {
+        const container = document.getElementById('raw-snippet');
         container.innerHTML = '';
 
-        if (inputTags.length === 0) {
-            container.innerHTML = '<div class="empty-state">No input tags found</div>';
+        const htmlLabel = this.extractDotHtmlLabel(nodeData.rawLabel);
+        if (htmlLabel) {
+            const renderedLabel = document.createElement('div');
+            renderedLabel.className = 'dot-html-label';
+            renderedLabel.appendChild(this.sanitizeDotHtml(htmlLabel));
+            container.appendChild(renderedLabel);
             return;
         }
 
-        // Group VInputTags by field name
-        const grouped = {};
-        const singles = [];
+        const fallback = document.createElement('pre');
+        fallback.className = 'raw-label-text';
+        fallback.textContent = nodeData.rawLabel || nodeData.detailLabel || nodeData.label || nodeData.id;
+        container.appendChild(fallback);
+    },
 
-        inputTags.forEach(tag => {
-            if (tag.type === 'VInputTag' || tag.type === 'ESInputTag') {
-                if (!grouped[tag.field]) {
-                    grouped[tag.field] = [];
-                }
-                grouped[tag.field].push(tag);
-            } else {
-                singles.push(tag);
+    /**
+     * Graphviz HTML labels are stored with an outer <...> wrapper.
+     */
+    extractDotHtmlLabel(rawLabel) {
+        if (!rawLabel) return null;
+
+        const trimmed = rawLabel.trim();
+        if (/^<\s*</.test(trimmed) && />\s*>$/.test(trimmed)) {
+            return trimmed.slice(1, -1).trim();
+        }
+
+        if (/^<\s*[a-z][\s>]/i.test(trimmed)) {
+            return trimmed;
+        }
+
+        return null;
+    },
+
+    /**
+     * Preserve the small HTML subset used by Graphviz labels.
+     */
+    sanitizeDotHtml(html) {
+        const template = document.createElement('template');
+        template.innerHTML = html;
+
+        const allowedTags = new Set(['TABLE', 'TBODY', 'TR', 'TD', 'B', 'I', 'U', 'S', 'SUB', 'SUP', 'FONT', 'BR']);
+        const allowedAttributes = {
+            TABLE: new Set(['border', 'cellpadding', 'cellspacing', 'align', 'bgcolor']),
+            TD: new Set(['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'colspan', 'rowspan']),
+            FONT: new Set(['color', 'face', 'size'])
+        };
+
+        const sanitizeNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return document.createTextNode(node.textContent);
             }
-        });
 
-        // Display VInputTag groups
-        Object.keys(grouped).forEach(field => {
-            const group = grouped[field];
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'vinput-tag-group';
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return document.createDocumentFragment();
+            }
 
-            const header = document.createElement('div');
-            header.className = 'vinput-tag-header';
-            header.textContent = field;
+            const tagName = node.tagName.toUpperCase();
+            const fragment = document.createDocumentFragment();
 
-            const typeSpan = document.createElement('span');
-            typeSpan.className = 'tag-type';
-            typeSpan.textContent = group[0].type;
-            header.appendChild(typeSpan);
+            if (!allowedTags.has(tagName)) {
+                Array.from(node.childNodes).forEach(child => {
+                    fragment.appendChild(sanitizeNode(child));
+                });
+                return fragment;
+            }
 
-            groupDiv.appendChild(header);
-
-            group.forEach((tag, idx) => {
-                const item = this.createInputTagItem(tag, `${field}[${idx}]`, true);
-                groupDiv.appendChild(item);
+            const element = document.createElement(tagName.toLowerCase());
+            const tagAttributes = allowedAttributes[tagName] || new Set();
+            Array.from(node.attributes).forEach(attribute => {
+                const name = attribute.name.toLowerCase();
+                if (tagAttributes.has(name)) {
+                    element.setAttribute(name, attribute.value);
+                }
             });
 
-            container.appendChild(groupDiv);
-        });
+            Array.from(node.childNodes).forEach(child => {
+                element.appendChild(sanitizeNode(child));
+            });
 
-        // Display single InputTags
-        singles.forEach(tag => {
-            const item = this.createInputTagItem(tag, tag.field, false);
-            container.appendChild(item);
+            return element;
+        };
+
+        const fragment = document.createDocumentFragment();
+        Array.from(template.content.childNodes).forEach(child => {
+            fragment.appendChild(sanitizeNode(child));
         });
+        return fragment;
     },
 
     /**
-     * Create input tag item element
+     * Display node attributes
      */
-    createInputTagItem(tag, displayField, isGrouped) {
-        const div = document.createElement('div');
-        div.className = 'input-tag-item';
-        if (isGrouped) {
-            div.className += ' vinput-item';
-        }
-
-        if (tag.found) {
-            div.className += ' clickable';
-            div.onclick = () => {
-                this.navigateToModule(tag.module);
-            };
-        } else {
-            div.className += ' not-found';
-        }
-
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'input-tag-field';
-        fieldDiv.textContent = displayField;
-
-        if (!isGrouped && tag.type) {
-            const typeSpan = document.createElement('span');
-            typeSpan.className = 'tag-type';
-            typeSpan.textContent = tag.type;
-            fieldDiv.appendChild(typeSpan);
-        }
-
-        const valueDiv = document.createElement('div');
-        valueDiv.className = 'input-tag-value';
-        valueDiv.textContent = Utils.formatInputTag(tag);
-
-        div.appendChild(fieldDiv);
-        div.appendChild(valueDiv);
-
-        if (!tag.found) {
-            const statusDiv = document.createElement('div');
-            statusDiv.className = 'input-tag-status not-found';
-            statusDiv.textContent = 'Module not found in graph';
-            div.appendChild(statusDiv);
-        }
-
-        return div;
-    },
-
-    /**
-     * Display parameters
-     */
-    displayParameters(parameters, inputTags) {
+    displayParameters(parameters) {
         const container = document.getElementById('parameters-list');
         container.innerHTML = '';
 
-        // Filter out InputTag parameters (already shown above)
-        const inputTagFields = new Set(inputTags.map(t => t.field));
-        const otherParams = Object.keys(parameters).filter(key => !inputTagFields.has(key));
-
-        if (otherParams.length === 0) {
-            container.innerHTML = '<div class="empty-state">No additional parameters</div>';
+        const attributeNames = Object.keys(parameters);
+        if (attributeNames.length === 0) {
+            container.innerHTML = '<div class="empty-state">No additional attributes</div>';
             return;
         }
 
-        otherParams.forEach(key => {
+        attributeNames.forEach(key => {
             const param = parameters[key];
             const div = document.createElement('div');
             div.className = 'parameter-item';
@@ -341,31 +278,29 @@ const PanelManager = {
     /**
      * Display error message
      */
-    displayError(moduleName) {
-        document.getElementById('module-name').textContent = moduleName;
-        document.getElementById('module-type').textContent = 'N/A';
-        document.getElementById('module-plugin').textContent = 'N/A';
-        document.getElementById('input-tags-list').innerHTML = '<div class="empty-state">Module data not available</div>';
-        document.getElementById('parameters-list').innerHTML = '<div class="empty-state">No parameters</div>';
-        document.getElementById('raw-snippet').textContent = 'No configuration available';
+    displayError(nodeName) {
+        document.getElementById('node-name').textContent = nodeName;
+        document.getElementById('node-shape').textContent = 'N/A';
+        document.getElementById('node-id').textContent = 'N/A';
+        document.getElementById('parameters-list').innerHTML = '<div class="empty-state">No attributes</div>';
+        document.getElementById('raw-snippet').innerHTML = '<div class="empty-state">No DOT label available</div>';
 
         this.panel.classList.remove('hidden');
     },
 
     /**
-     * Navigate to a different module
+     * Navigate to a different node by label
      */
-    navigateToModule(moduleName) {
-        console.log('Navigating to module:', moduleName);
+    navigateToNode(nodeName) {
+        console.log('Navigating to node:', nodeName);
 
-        // Find node in graph
-        const nodes = GraphManager.getNodeByLabel(moduleName);
+        const nodes = GraphManager.getNodeByLabel(nodeName);
 
         if (nodes.length > 0) {
             const nodeId = nodes[0].id();
-            this.open(moduleName, nodeId);
+            this.open(nodeName, nodeId);
         } else {
-            console.warn('Module not found in graph:', moduleName);
+            console.warn('Node not found in graph:', nodeName);
         }
     },
 
@@ -376,7 +311,7 @@ const PanelManager = {
         const container = document.getElementById('breadcrumbs');
         container.innerHTML = '';
 
-        this.history.forEach((moduleName, index) => {
+        this.history.forEach((nodeName, index) => {
             if (index > 0) {
                 const separator = document.createElement('span');
                 separator.className = 'breadcrumb-separator';
@@ -391,13 +326,13 @@ const PanelManager = {
                 crumb.className += ' current';
             }
 
-            crumb.textContent = moduleName;
+            crumb.textContent = nodeName;
 
             if (index < this.history.length - 1) {
                 crumb.onclick = () => {
                     // Truncate history and navigate back
                     this.history = this.history.slice(0, index + 1);
-                    this.navigateToModule(moduleName);
+                    this.navigateToNode(nodeName);
                 };
             }
 
@@ -412,6 +347,6 @@ const PanelManager = {
         this.panel.classList.add('hidden');
         GraphManager.clearHighlight();
         this.history = [];
-        this.currentModule = null;
+        this.currentNode = null;
     }
 };

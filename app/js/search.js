@@ -1,6 +1,6 @@
 /**
  * search.js - Search functionality
- * Handles module search and highlighting
+ * Handles node search and highlighting
  */
 
 const SearchManager = {
@@ -52,7 +52,7 @@ const SearchManager = {
         });
 
         if (matches.length === 0) {
-            alert(`No modules found matching "${query}"`);
+            alert(`No nodes found matching "${query}"`);
             return;
         }
 
@@ -82,7 +82,7 @@ const SearchManager = {
                 duration: 500
             });
 
-            console.log(`Found ${matches.length} matching modules`);
+            console.log(`Found ${matches.length} matching nodes`);
         }
     },
 

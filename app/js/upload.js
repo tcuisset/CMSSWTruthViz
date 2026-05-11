@@ -1,15 +1,13 @@
 /**
  * upload.js - File upload functionality
- * Handles uploading a DOT graph and optional dumpConfig.py, then regenerating the bundle
+ * Handles uploading a DOT graph, then regenerating the bundle
  */
 
 const UploadManager = {
     modal: null,
     form: null,
     dotFileInput: null,
-    configFileInput: null,
     dotFileInfo: null,
-    configFileInfo: null,
     uploadProgress: null,
     uploadStatus: null,
     submitBtn: null,
@@ -21,9 +19,7 @@ const UploadManager = {
         this.modal = document.getElementById('upload-modal');
         this.form = document.getElementById('upload-form');
         this.dotFileInput = document.getElementById('dot-file-input');
-        this.configFileInput = document.getElementById('config-file-input');
         this.dotFileInfo = document.getElementById('dot-file-info');
-        this.configFileInfo = document.getElementById('config-file-info');
         this.uploadProgress = document.getElementById('upload-progress');
         this.uploadStatus = document.getElementById('upload-status');
         this.submitBtn = document.getElementById('upload-submit-btn');
@@ -61,10 +57,6 @@ const UploadManager = {
             this.updateFileInfo(e.target, this.dotFileInfo);
         });
 
-        this.configFileInput.addEventListener('change', (e) => {
-            this.updateFileInfo(e.target, this.configFileInfo);
-        });
-
         // Form submit
         this.form.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -94,7 +86,6 @@ const UploadManager = {
     resetForm() {
         this.form.reset();
         this.dotFileInfo.textContent = 'No file selected';
-        this.configFileInfo.textContent = 'No file selected';
         this.uploadProgress.classList.add('hidden');
         this.submitBtn.disabled = false;
     },
@@ -117,7 +108,6 @@ const UploadManager = {
      */
     async handleUpload() {
         const dotFile = this.dotFileInput.files[0];
-        const configFile = this.configFileInput.files[0];
 
         if (!dotFile) {
             alert('Please select a DOT graph file');
@@ -133,9 +123,6 @@ const UploadManager = {
             // Create form data
             const formData = new FormData();
             formData.append('dotFile', dotFile);
-            if (configFile) {
-                formData.append('configFile', configFile);
-            }
 
             // Upload files
             const response = await fetch('http://localhost:8000/upload', {

@@ -110,7 +110,7 @@ body {
     border-radius: 3px;
 }
 
-#selected-module-name {
+#selected-node-name {
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -124,68 +124,6 @@ body {
     padding: 8px 12px;
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Filter Controls */
-#filter-controls-wrapper {
-    background: rgba(52, 152, 219, 0.15);
-    padding: 10px;
-    border-radius: 4px;
-    border: 1px solid rgba(52, 152, 219, 0.3);
-}
-
-#filter-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-
-.filter-category {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 4px 10px;
-    border-radius: 3px;
-}
-
-.filter-category strong {
-    color: #ecf0f1;
-    font-size: 12px;
-    margin-right: 5px;
-}
-
-.filter-category label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    cursor: pointer;
-    color: #ecf0f1;
-}
-
-.filter-category input[type="checkbox"] {
-    cursor: pointer;
-    width: 16px;
-    height: 16px;
-}
-
-.filter-btn {
-    padding: 4px 10px !important;
-    font-size: 12px !important;
-    background: #16a085 !important;
-}
-
-.filter-btn:hover {
-    background: #138d75 !important;
-}
-
-.filter-stats {
-    color: #ecf0f1;
-    font-size: 12px;
-    font-weight: 600;
-    margin-left: auto;
 }
 
 /* Main Content Area */
@@ -402,8 +340,8 @@ body {
     padding: 20px;
 }
 
-/* Module Info */
-#module-info h2 {
+/* Node Info */
+#node-info h2 {
     font-size: 22px;
     color: #2c3e50;
     margin-bottom: 15px;
@@ -432,58 +370,6 @@ body {
     margin-bottom: 12px;
 }
 
-/* Input Tags */
-#input-tags-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.input-tag-item {
-    padding: 10px;
-    background: #ecf0f1;
-    border-radius: 4px;
-    font-size: 13px;
-}
-
-.input-tag-item.clickable {
-    cursor: pointer;
-    background: #d5e8f7;
-    border-left: 3px solid #3498db;
-    transition: background 0.2s;
-}
-
-.input-tag-item.clickable:hover {
-    background: #c1dff5;
-}
-
-.input-tag-item.not-found {
-    background: #fadbd8;
-    border-left: 3px solid #e74c3c;
-    cursor: default;
-}
-
-.input-tag-field {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 4px;
-}
-
-.input-tag-value {
-    font-family: 'Courier New', monospace;
-    color: #555;
-}
-
-.input-tag-status {
-    font-size: 11px;
-    color: #999;
-    margin-top: 4px;
-}
-
-.input-tag-status.not-found {
-    color: #e74c3c;
-}
-
 .tag-type {
     font-size: 10px;
     color: #7f8c8d;
@@ -494,36 +380,7 @@ body {
     margin-left: 6px;
 }
 
-/* VInputTag Groups */
-.vinput-tag-group {
-    background: #e8f4f8;
-    border: 1px solid #3498db;
-    border-radius: 4px;
-    padding: 10px;
-    margin-bottom: 8px;
-}
-
-.vinput-tag-header {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #3498db;
-}
-
-.vinput-item {
-    margin-left: 10px;
-    margin-top: 6px;
-    font-size: 12px;
-}
-
-.vinput-item .input-tag-field {
-    color: #7f8c8d;
-    font-weight: normal;
-    font-size: 11px;
-}
-
-/* Parameters */
+/* Attributes */
 #parameters-list {
     display: flex;
     flex-direction: column;
@@ -556,14 +413,37 @@ body {
 
 /* Raw Snippet */
 #raw-snippet {
-    background: #2c3e50;
-    color: #ecf0f1;
+    background: #f8f9fa;
+    color: #2c3e50;
     padding: 15px;
     border-radius: 4px;
+    border: 1px solid #e1e5e8;
+    overflow-x: auto;
+}
+
+.dot-html-label {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.dot-html-label table {
+    border-collapse: collapse;
+    background: white;
+    color: #2c3e50;
+    font-size: 13px;
+}
+
+.dot-html-label td {
+    border: 1px solid #bdc3c7;
+    padding: 4px 6px;
+    vertical-align: middle;
+}
+
+.raw-label-text {
+    margin: 0;
     font-family: 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.5;
-    overflow-x: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
 }

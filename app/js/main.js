@@ -1,6 +1,6 @@
 /**
  * main.js - Application initialization
- * Loads data and initializes all modules
+ * Loads data and initializes the viewer
  * Supports both static mode (file://) and server mode (http://)
  */
 
@@ -34,8 +34,7 @@ async function initApp() {
             window.bundleData = window.EMBEDDED_BUNDLE_DATA;
             console.log('Embedded bundle data loaded:', {
                 nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length,
-                modules: Object.keys(window.bundleData.modules || {}).length
+                edges: window.bundleData.edges.length
             });
         } else {
             // Server mode: Fetch from server
@@ -48,8 +47,7 @@ async function initApp() {
             window.bundleData = await response.json();
             console.log('Bundle data loaded from server:', {
                 nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length,
-                modules: Object.keys(window.bundleData.modules || {}).length
+                edges: window.bundleData.edges.length
             });
         }
 
@@ -62,7 +60,6 @@ async function initApp() {
         EgoGraphManager.init();
         DependencyExplorer.init();
         KeyboardNav.init();
-        FilterManager.init();
 
         // Initialize upload only in server mode
         if (!staticMode) {
@@ -78,8 +75,7 @@ async function initApp() {
         // Update stats
         updateStats({
             nodeCount: window.bundleData.nodes.length,
-            edgeCount: window.bundleData.edges.length,
-            moduleCount: Object.keys(window.bundleData.modules || {}).length
+            edgeCount: window.bundleData.edges.length
         });
 
         // Hide loading indicator
@@ -115,7 +111,6 @@ function showLoading(show) {
 function updateStats(stats) {
     document.getElementById('node-count').textContent = `Nodes: ${stats.nodeCount}`;
     document.getElementById('edge-count').textContent = `Edges: ${stats.edgeCount}`;
-    document.getElementById('module-count').textContent = `Config modules: ${stats.moduleCount}`;
 }
 
 // Start application when DOM is ready
