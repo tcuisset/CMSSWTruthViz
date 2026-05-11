@@ -239,7 +239,7 @@ const KeyboardNav = {
         // Center on node
         GraphManager.cy.animate({
             center: { eles: node },
-            zoom: Math.max(GraphManager.cy.zoom(), 1.0)
+            zoom: GraphManager.cy.zoom()
         }, {
             duration: 300
         });

@@ -127,7 +127,7 @@ const GraphManager = {
     },
 
     getNodeBorderColor(ele) {
-        if (this.hasCrossedBoundary(ele)) return '#c0392b';
+        if (this.hasCrossedBoundary(ele)) return '#e804ec';
         if (this.isLogicalGenSimNode(ele)) return this.nodeTypeColors.sim;
         if (this.isLogicalGraph()) return '#34495e';
 
@@ -335,7 +335,7 @@ const GraphManager = {
 
             layout: this.getLayoutConfig(),
 
-            minZoom: 0.1,
+            minZoom: 0.02,
             maxZoom: 3,
             wheelSensitivity: 0.2
         });
@@ -550,7 +550,7 @@ const GraphManager = {
 
         this.cy.animate({
             center: { eles: node },
-            zoom: Math.max(this.cy.zoom(), 1.0)
+            zoom: this.cy.zoom()
         }, {
             duration: 300
         });
