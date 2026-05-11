@@ -100,6 +100,9 @@ chmod +x run.sh
 
 # Run the application (handles everything automatically)
 ./run.sh
+
+# Use a specific DOT graph
+./run.sh --dot ../truthlogicalgraph.dot
 ```
 
 ### What run.sh Does
@@ -116,9 +119,9 @@ The script automatically handles the complete setup:
    - Checks for `pydot` and `networkx`
    - Runs `pip install -r preprocess/requirements.txt` if needed
 
-4. ✅ **Generates data bundle** (if `data/bundle.json` doesn't exist)
-   - Runs `python preprocess/build_bundle.py`
-   - Parses `dependency.gv` and `dumpConfig.py`
+4. ✅ **Generates data bundle** (if missing, stale, or using a different DOT file)
+   - Runs `python preprocess/build_bundle.py [dot_file]`
+   - Parses the selected DOT file
    - Creates `data/bundle.json` (~22 MB)
 
 5. ✅ **Starts web server**
