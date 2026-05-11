@@ -21,6 +21,14 @@ const FilterManager = {
      * Initialize filter manager
      */
     init() {
+        if (!window.bundleData?.metadata?.module_count) {
+            const wrapper = document.getElementById('filter-controls-wrapper');
+            if (wrapper) {
+                wrapper.style.display = 'none';
+            }
+            return;
+        }
+
         // Get filter checkboxes
         this.filters.reco = document.getElementById('filter-reco');
         this.filters.analysis = document.getElementById('filter-analysis');

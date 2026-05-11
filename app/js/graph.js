@@ -18,7 +18,7 @@ const GraphManager = {
             nodes: data.nodes.map(n => ({
                 data: {
                     id: n.id,
-                    label: n.label || n.id,
+                    label: n.displayLabel || n.label || n.id,
                     ...n
                 }
             })),
@@ -42,12 +42,16 @@ const GraphManager = {
                 {
                     selector: 'node',
                     style: {
-                        'width': 50,
-                        'height': 35,
+                        'width': 'label',
+                        'height': 'label',
+                        'padding': 10,
                         'label': 'data(label)',
                         'text-valign': 'center',
                         'text-halign': 'center',
-                        'font-size': 10,
+                        'font-size': 8,
+                        'text-wrap': 'wrap',
+                        'text-max-width': 180,
+                        'line-height': 1.25,
                         'color': '#000',
                         'text-background-color': 'rgba(255, 255, 255, 0.7)',
                         'text-background-opacity': 1,
@@ -267,8 +271,15 @@ const GraphManager = {
      */
     getNodeByLabel(label) {
         return this.cy.nodes().filter(node => {
-            return node.data('label') === label;
+            return node.data('label') === label || node.data('id') === label;
         });
+    },
+
+    /**
+     * Get source node data from the bundle by ID
+     */
+    getBundleNode(nodeId) {
+        return window.bundleData?.nodes?.find(node => node.id === nodeId) || null;
     },
 
     /**

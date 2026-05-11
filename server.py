@@ -2,7 +2,7 @@
 """
 Simple HTTP server for the CMSSW Graph Visualization app.
 Serves static files with proper CORS headers for local development.
-Handles file uploads and bundle regeneration.
+Handles DOT file uploads and bundle regeneration.
 """
 
 import http.server
@@ -59,15 +59,15 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             dot_file = form['dotFile'].file if 'dotFile' in form else None
             config_file = form['configFile'].file if 'configFile' in form else None
 
-            if not dot_file or not config_file:
-                self.send_json_response({'success': False, 'error': 'Both files are required'}, 400)
+            if not dot_file:
+                self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
                 return
 
             # Get project root
             project_root = Path(__file__).parent
 
             # Save files
-            dot_path = project_root / "dependency.gv"
+            dot_path = project_root / "truthgraph.dot"
             config_path = project_root / "dumpConfig.py"
 
             print(f"\nSaving uploaded files...")
@@ -75,16 +75,24 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 f.write(dot_file.read())
             print(f"  Saved: {dot_path}")
 
-            with open(config_path, 'wb') as f:
-                f.write(config_file.read())
-            print(f"  Saved: {config_path}")
+            if config_file:
+                with open(config_path, 'wb') as f:
+                    f.write(config_file.read())
+                print(f"  Saved: {config_path}")
 
             # Run bundle generation
             print(f"\nRegenerating bundle...")
             build_script = project_root / "preprocess" / "build_bundle.py"
+            build_args = [
+                sys.executable,
+                str(build_script),
+                str(dot_path),
+                str(config_path) if config_file else "",
+                str(project_root / "data" / "bundle.json")
+            ]
 
             result = subprocess.run(
-                [sys.executable, str(build_script)],
+                build_args,
                 cwd=project_root,
                 capture_output=True,
                 text=True,
@@ -133,7 +141,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def main():
-    PORT = 8000
+    PORT = 8005
     HOST = 'localhost'
 
     # Change to project root directory

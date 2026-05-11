@@ -18,7 +18,7 @@ function isStaticMode() {
  * Initialize the application
  */
 async function initApp() {
-    console.log('Initializing CMSSW Graph Visualization...');
+    console.log('Initializing Graph Visualization...');
 
     const staticMode = isStaticMode();
     console.log(`Mode: ${staticMode ? 'Static (file://)' : 'Server (http://)'}`);
@@ -35,7 +35,7 @@ async function initApp() {
             console.log('Embedded bundle data loaded:', {
                 nodes: window.bundleData.nodes.length,
                 edges: window.bundleData.edges.length,
-                modules: Object.keys(window.bundleData.modules).length
+                modules: Object.keys(window.bundleData.modules || {}).length
             });
         } else {
             // Server mode: Fetch from server
@@ -49,7 +49,7 @@ async function initApp() {
             console.log('Bundle data loaded from server:', {
                 nodes: window.bundleData.nodes.length,
                 edges: window.bundleData.edges.length,
-                modules: Object.keys(window.bundleData.modules).length
+                modules: Object.keys(window.bundleData.modules || {}).length
             });
         }
 
@@ -79,7 +79,7 @@ async function initApp() {
         updateStats({
             nodeCount: window.bundleData.nodes.length,
             edgeCount: window.bundleData.edges.length,
-            moduleCount: Object.keys(window.bundleData.modules).length
+            moduleCount: Object.keys(window.bundleData.modules || {}).length
         });
 
         // Hide loading indicator
@@ -115,7 +115,7 @@ function showLoading(show) {
 function updateStats(stats) {
     document.getElementById('node-count').textContent = `Nodes: ${stats.nodeCount}`;
     document.getElementById('edge-count').textContent = `Edges: ${stats.edgeCount}`;
-    document.getElementById('module-count').textContent = `Modules: ${stats.moduleCount}`;
+    document.getElementById('module-count').textContent = `Config modules: ${stats.moduleCount}`;
 }
 
 // Start application when DOM is ready

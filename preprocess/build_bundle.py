@@ -52,17 +52,21 @@ def build_bundle(dot_path, config_path, output_path):
     Build complete JSON bundle from DOT file and config file.
     """
     print("=" * 60)
-    print("Building CMSSW Module Dependency Graph Bundle")
+    print("Building Graph Bundle")
     print("=" * 60)
 
     # Parse DOT file
     graph_data = parse_dot_file(dot_path)
 
-    # Parse config file
-    modules = parse_config_file(config_path)
+    modules = {}
+    if config_path and config_path.exists():
+        # Parse config file
+        modules = parse_config_file(config_path)
 
-    # Validate and enrich InputTags
-    modules = validate_and_enrich_input_tags(modules, graph_data["labelToId"])
+        # Validate and enrich InputTags
+        modules = validate_and_enrich_input_tags(modules, graph_data["labelToId"])
+    else:
+        print("\nNo CMSSW config file supplied; using DOT node attributes only")
 
     # Build final bundle
     bundle = {
@@ -83,7 +87,7 @@ def build_bundle(dot_path, config_path, output_path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(bundle, f, indent=2)
+        json.dump(bundle, f, indent=2, ensure_ascii=False)
 
     file_size = output_path.stat().st_size
     print(f"  Bundle size: {file_size:,} bytes ({file_size/1024/1024:.2f} MB)")
@@ -111,26 +115,26 @@ def build_bundle(dot_path, config_path, output_path):
 def main():
     # Default paths relative to project root
     project_root = Path(__file__).parent.parent
-    dot_path = project_root / "dependency.gv"
-    config_path = project_root / "dumpConfig.py"
+    dot_candidates = [
+        project_root / "truthgraph.dot",
+        project_root.parent / "truthgraph.dot",
+        project_root / "dependency.gv",
+    ]
+    dot_path = next((path for path in dot_candidates if path.exists()), dot_candidates[0])
+    config_path = None
     output_path = project_root / "data" / "bundle.json"
 
     # Allow command-line overrides
     if len(sys.argv) >= 2:
         dot_path = Path(sys.argv[1])
     if len(sys.argv) >= 3:
-        config_path = Path(sys.argv[2])
+        config_path = Path(sys.argv[2]) if sys.argv[2] else None
     if len(sys.argv) >= 4:
         output_path = Path(sys.argv[3])
 
     # Validate input files
     if not dot_path.exists():
         print(f"Error: DOT file not found: {dot_path}")
-        print("\nUsage: python build_bundle.py [dot_file] [config_file] [output_file]")
-        sys.exit(1)
-
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}")
         print("\nUsage: python build_bundle.py [dot_file] [config_file] [output_file]")
         sys.exit(1)
 

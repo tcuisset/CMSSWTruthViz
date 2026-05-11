@@ -100,25 +100,36 @@ const PanelManager = {
         }
 
         // Get module data
-        const moduleData = window.bundleData.modules[moduleName];
+        const moduleData = window.bundleData.modules?.[moduleName];
 
         if (!moduleData) {
+            const nodeData = GraphManager.getBundleNode(nodeId);
+            if (nodeData) {
+                this.displayNode(nodeData);
+                this.updateBreadcrumbs();
+                this.panel.classList.remove('hidden');
+
+                if (nodeId) {
+                    GraphManager.highlightNode(nodeId);
+                }
+                return;
+            }
+
             this.displayError(moduleName);
-            return;
-        }
+        } else {
+            // Display module info
+            this.displayModule(moduleName, moduleData, nodeId);
 
-        // Display module info
-        this.displayModule(moduleName, moduleData, nodeId);
+            // Update breadcrumbs
+            this.updateBreadcrumbs();
 
-        // Update breadcrumbs
-        this.updateBreadcrumbs();
+            // Show panel
+            this.panel.classList.remove('hidden');
 
-        // Show panel
-        this.panel.classList.remove('hidden');
-
-        // Highlight node in graph
-        if (nodeId) {
-            GraphManager.highlightNode(nodeId);
+            // Highlight node in graph
+            if (nodeId) {
+                GraphManager.highlightNode(nodeId);
+            }
         }
     },
 
@@ -139,6 +150,44 @@ const PanelManager = {
 
         // Raw snippet
         document.getElementById('raw-snippet').textContent = moduleData.rawSnippet || 'No configuration available';
+    },
+
+    /**
+     * Display generic DOT node information.
+     */
+    displayNode(nodeData) {
+        const title = (nodeData.detailLabel || nodeData.label || nodeData.id).split('\n')[0];
+        document.getElementById('module-name').textContent = title;
+        document.getElementById('module-type').textContent = nodeData.shape || 'DOT node';
+        document.getElementById('module-plugin').textContent = nodeData.id;
+
+        document.getElementById('input-tags-list').innerHTML = '<div class="empty-state">No CMSSW input tags for this graph</div>';
+
+        const ignoredKeys = new Set(['id', 'label', 'displayLabel', 'detailLabel', 'rawLabel']);
+        const parameters = {};
+
+        Object.keys(nodeData).forEach(key => {
+            if (!ignoredKeys.has(key) && nodeData[key] !== undefined && nodeData[key] !== null) {
+                parameters[key] = {
+                    type: 'DOT attribute',
+                    value: String(nodeData[key])
+                };
+            }
+        });
+
+        this.displayParameters(parameters, []);
+
+        const rawLines = [];
+        if (nodeData.rawLabel) {
+            rawLines.push('raw label:');
+            rawLines.push(nodeData.rawLabel);
+            rawLines.push('');
+        }
+
+        rawLines.push('display label:');
+        rawLines.push(nodeData.detailLabel || nodeData.label || nodeData.id);
+
+        document.getElementById('raw-snippet').textContent = rawLines.join('\n');
     },
 
     /**

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CMSSW Module Dependency Graph</title>
+    <title>Truth Graph Viewer</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,13 +11,13 @@
         <!-- Header Controls -->
         <div id="controls">
             <div class="controls-section">
-                <h1>CMSSW Module Dependency Graph</h1>
+                <h1>Truth Graph Viewer</h1>
             </div>
 
             <div class="controls-section">
                 <div class="control-group">
                     <label for="search-input">Search:</label>
-                    <input type="text" id="search-input" placeholder="Enter module name..." />
+                    <input type="text" id="search-input" placeholder="Search node labels..." />
                     <button id="search-btn">Find</button>
                     <button id="search-clear-btn">Clear</button>
                 </div>
@@ -30,7 +30,7 @@
                 </div>
 
                 <div class="control-group" id="dependency-controls">
-                    <label>📊 Dependencies:</label>
+                    <label>Links:</label>
                     <span id="selected-module-name" style="color: #ecf0f1; font-weight: 600;">None selected</span>
                     <label for="dep-depth">Depth:</label>
                     <input type="number" id="dep-depth" min="1" max="10" value="1" style="width: 60px;" />
@@ -47,7 +47,7 @@
 
             <div class="controls-section" id="filter-controls-wrapper">
                 <div class="control-group" id="filter-controls">
-                    <label>🔍 Filters:</label>
+                    <label>Filters:</label>
 
                     <div class="filter-category">
                         <strong>Stage:</strong>
@@ -78,7 +78,7 @@
                 <span id="node-count">Nodes: -</span>
                 <span id="edge-count">Edges: -</span>
                 <span id="module-count">Modules: -</span>
-                <button id="upload-btn" style="margin-left: 20px;">📁 Upload Files</button>
+                <button id="upload-btn" style="margin-left: 20px;">Upload Files</button>
             </div>
         </div>
 
@@ -91,18 +91,17 @@
 
                 <!-- Legend -->
                 <div id="legend">
-                    <div class="legend-title">Workflow Stage</div>
+                    <div class="legend-title">Node Type</div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #2ecc71;"></div>
-                        <span>Green: Reconstruction (631, 48%)</span>
+                        <div class="legend-color" style="background: #3498db;"></div>
+                        <span>Box: particle/event node</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #d3d3d3;"></div>
-                        <span>Gray: Analysis/PAT (684, 52%)</span>
+                        <div class="legend-color" style="background: #3498db;"></div>
+                        <span>Diamond: vertex node</span>
                     </div>
                     <div class="legend-note" style="font-size: 11px; margin-top: 8px;">
-                        Most modules are EDProducers.<br>
-                        Use filters above to show/hide categories.
+                        Node text is built from DOT attributes.
                     </div>
                     <div class="legend-note">
                         ⌨️ <strong>Keyboard:</strong><br>
@@ -128,7 +127,7 @@
                             <strong>Type:</strong> <span id="module-type">-</span>
                         </div>
                         <div class="info-section">
-                            <strong>Plugin:</strong> <span id="module-plugin">-</span>
+                            <strong>ID:</strong> <span id="module-plugin">-</span>
                         </div>
                     </div>
 
@@ -143,7 +142,7 @@
                     </div>
 
                     <div id="raw-snippet-section" class="section">
-                        <h3>Raw Configuration</h3>
+                        <h3>Raw DOT Label</h3>
                         <pre id="raw-snippet"></pre>
                     </div>
                 </div>
@@ -159,16 +158,16 @@
                 <button id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Upload new dependency.gv and dumpConfig.py files to regenerate the bundle.</p>
+                <p>Upload a DOT graph to regenerate the bundle. A CMSSW config file is optional.</p>
                 <form id="upload-form">
                     <div class="form-group">
-                        <label for="dot-file-input">Dependency Graph (dependency.gv):</label>
+                        <label for="dot-file-input">Graph (truthgraph.dot):</label>
                         <input type="file" id="dot-file-input" accept=".gv,.dot" required>
                         <span class="file-info" id="dot-file-info">No file selected</span>
                     </div>
                     <div class="form-group">
-                        <label for="config-file-input">CMSSW Config (dumpConfig.py):</label>
-                        <input type="file" id="config-file-input" accept=".py" required>
+                        <label for="config-file-input">CMSSW Config (optional):</label>
+                        <input type="file" id="config-file-input" accept=".py">
                         <span class="file-info" id="config-file-info">No file selected</span>
                     </div>
                     <div class="form-actions">

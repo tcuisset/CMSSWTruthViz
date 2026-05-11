@@ -11,6 +11,116 @@ import networkx as nx
 from pathlib import Path
 
 
+GRAPH_STYLE_ATTRIBUTES = {
+    "color",
+    "fillcolor",
+    "fontcolor",
+    "fontsize",
+    "height",
+    "label",
+    "penwidth",
+    "style",
+    "tooltip",
+    "width",
+}
+
+
+def clean_attr_value(value):
+    """Normalize pydot attribute values for display and JSON output."""
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip().strip('"')
+
+    # Graphviz allows HTML-like values wrapped in angle brackets. The truth
+    # graph uses this for x4 tuples, where the brackets are only DOT syntax.
+    if value.startswith("<") and value.endswith(">") and "\n" not in value:
+        value = value[1:-1].strip()
+
+    return value
+
+
+def node_number(node_id):
+    """Return the numeric part of node IDs like n1999 when present."""
+    return node_id[1:] if node_id.startswith("n") and node_id[1:].isdigit() else node_id
+
+
+def fourth_tuple_value(value):
+    """Extract the fourth value from a tuple-like DOT attribute."""
+    if not isinstance(value, str):
+        return None
+
+    cleaned = value.strip().strip("<>").strip()
+    if not (cleaned.startswith("(") and cleaned.endswith(")")):
+        return None
+
+    parts = [part.strip() for part in cleaned[1:-1].split(",")]
+    return parts[3] if len(parts) >= 4 else None
+
+
+def build_display_label(node_id, attrs):
+    """Build the default node label shown in Cytoscape."""
+    data_attrs = {
+        key: clean_attr_value(value)
+        for key, value in attrs.items()
+        if key not in GRAPH_STYLE_ATTRIBUTES and key != "shape"
+    }
+
+    label_parts = [f"node: {node_number(node_id)}"]
+
+    particle_id = (
+        data_attrs.get("pdgId")
+        or data_attrs.get("pdgid")
+        or data_attrs.get("pid")
+        or data_attrs.get("pdg")
+    )
+    if particle_id is not None:
+        label_parts.append(f"pdgId/pid: {particle_id}")
+
+    energy = fourth_tuple_value(data_attrs.get("p4")) or fourth_tuple_value(data_attrs.get("x4"))
+    if energy is not None:
+        label_parts.append(f"E: {energy}")
+
+    return "\n".join(label_parts)
+
+
+def build_detail_label(node_id, attrs):
+    """Build a full multi-line label from all DOT node attributes."""
+    label_parts = [node_id]
+
+    data_attrs = {
+        key: clean_attr_value(value)
+        for key, value in attrs.items()
+        if key not in GRAPH_STYLE_ATTRIBUTES and key != "shape"
+    }
+
+    preferred_groups = [
+        ("pid", "status"),
+        ("barcode", "event", "spid"),
+        ("p4",),
+        ("x4",),
+        ("m",),
+        ("prodVtx", "endVtx"),
+        ("nIn", "nOut"),
+    ]
+
+    used = set()
+    for group in preferred_groups:
+        values = []
+        for key in group:
+            if key in data_attrs:
+                values.append(f"{key}: {data_attrs[key]}")
+                used.add(key)
+        if values:
+            label_parts.append("  ".join(values))
+
+    for key in sorted(data_attrs):
+        if key not in used:
+            label_parts.append(f"{key}: {data_attrs[key]}")
+
+    return "\n".join(label_parts)
+
+
 def parse_dot_file(dot_path):
     """
     Parse a DOT file and extract nodes, edges, and mappings.
@@ -48,20 +158,30 @@ def parse_dot_file(dot_path):
 
         # Get attributes
         attrs = node.get_attributes()
+        clean_attrs = {
+            key: clean_attr_value(value)
+            for key, value in attrs.items()
+        }
 
-        # Extract label (fallback to node_id if not present)
-        label = attrs.get("label", node_id).strip('"')
+        # Build a readable display label from DOT attributes. The raw Graphviz
+        # label is preserved separately because truthgraph.dot uses HTML labels.
+        raw_label = clean_attrs.get("label")
+        label = build_display_label(node_id, clean_attrs)
+        detail_label = build_detail_label(node_id, clean_attrs)
 
         # Build node object
         node_obj = {
             "id": node_id,
             "label": label,
+            "displayLabel": label,
+            "detailLabel": detail_label,
+            "rawLabel": raw_label,
         }
 
         # Add all other attributes
-        for key, value in attrs.items():
+        for key, value in clean_attrs.items():
             if key != "label":
-                node_obj[key] = value.strip('"') if isinstance(value, str) else value
+                node_obj[key] = value
 
         nodes.append(node_obj)
         valid_node_ids.add(node_id)
