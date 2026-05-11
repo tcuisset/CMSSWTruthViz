@@ -8,8 +8,8 @@ const GraphManager = {
     fullGraph: null,
     dagreRegistered: false,
     graphName: '',
-    hideGenEventNodes: false,
-    hideSimVertexKey0Node: false,
+    hideGenEventNodes: true,
+    hideSimVertexKey0Node: true,
     nodeTypeColors: {
         gen: '#2e86de',
         sim: '#e67e22',
@@ -461,7 +461,7 @@ const GraphManager = {
     setHideGenEventNodes(shouldHide) {
         this.hideGenEventNodes = shouldHide;
         this.applyGenEventFilter();
-        this.fitVisible();
+        this.relayoutVisible();
     },
 
     /**
@@ -494,7 +494,7 @@ const GraphManager = {
     setHideSimVertexKey0Node(shouldHide) {
         this.hideSimVertexKey0Node = shouldHide;
         this.applySimVertexKey0Filter();
-        this.fitVisible();
+        this.relayoutVisible();
     },
 
     /**
@@ -658,14 +658,51 @@ const GraphManager = {
     },
 
     /**
+     * Recompute layout using only nodes still visible after all active filters.
+     */
+    relayoutVisible() {
+        const visibleNodes = this.getVisibleNodes();
+
+        if (visibleNodes.length === 0) {
+            this.cy.fit();
+            return;
+        }
+
+        const visibleEdges = this.cy.edges().filter(edge => {
+            return this.isEdgeVisibleForLayout(edge);
+        });
+
+        const layout = visibleNodes.union(visibleEdges).layout(this.getLayoutConfig());
+        layout.one('layoutstop', () => this.fitVisible());
+        layout.run();
+    },
+
+    /**
+     * Nodes still visible after all active filters.
+     */
+    getVisibleNodes() {
+        return this.cy.nodes().filter(node => this.isNodeVisibleForLayout(node));
+    },
+
+    isNodeVisibleForLayout(node) {
+        return !node.hasClass('hidden')
+            && !node.hasClass('gen-event-filtered')
+            && !node.hasClass('sim-vertex-key0-filtered');
+    },
+
+    isEdgeVisibleForLayout(edge) {
+        return !edge.hasClass('hidden')
+            && !edge.hasClass('gen-event-filtered')
+            && !edge.hasClass('sim-vertex-key0-filtered')
+            && this.isNodeVisibleForLayout(edge.source())
+            && this.isNodeVisibleForLayout(edge.target());
+    },
+
+    /**
      * Fit to nodes still visible after all active filters.
      */
     fitVisible() {
-        const visibleNodes = this.cy.nodes().filter(node => {
-            return !node.hasClass('hidden')
-                && !node.hasClass('gen-event-filtered')
-                && !node.hasClass('sim-vertex-key0-filtered');
-        });
+        const visibleNodes = this.getVisibleNodes();
 
         if (visibleNodes.length > 0) {
             this.cy.fit(visibleNodes);
