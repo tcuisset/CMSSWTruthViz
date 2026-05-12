@@ -7,6 +7,7 @@ Handles DOT file uploads and bundle regeneration.
 
 import http.server
 import socketserver
+import argparse
 import os
 import sys
 import json
@@ -14,6 +15,19 @@ import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs
 import cgi
+
+
+EMPTY_BUNDLE = {
+    "nodes": [],
+    "edges": [],
+    "labelToId": {},
+    "metadata": {
+        "graph_name": "empty",
+        "is_directed": True,
+        "node_count": 0,
+        "edge_count": 0,
+    },
+}
 
 
 class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -138,35 +152,136 @@ class ReusableTCPServer(socketserver.TCPServer):
     allow_reuse_address = True
 
 
-def create_server(host, start_port, handler, max_attempts=100):
-    """Bind to the first available port at or above start_port."""
-    for port in range(start_port, start_port + max_attempts):
+def port_number(value):
+    """Parse and validate a TCP port number."""
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid port: {value}") from exc
+
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+
+    return port
+
+
+def positive_int(value):
+    """Parse and validate a positive integer."""
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid integer: {value}") from exc
+
+    if number < 1:
+        raise argparse.ArgumentTypeError("value must be at least 1")
+
+    return number
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Run the Truth Graph Viewer local development server."
+    )
+    parser.add_argument(
+        "--host",
+        default="localhost",
+        help="Host interface to bind to. Defaults to localhost.",
+    )
+    parser.add_argument(
+        "--start-port",
+        "--port",
+        dest="start_port",
+        default=8009,
+        type=port_number,
+        help="Port to bind to, or the first port to try when auto-find is enabled. Defaults to 8009.",
+    )
+    parser.add_argument(
+        "--auto-find-port",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Try subsequent ports when the start port is already in use. Enabled by default.",
+    )
+    parser.add_argument(
+        "--max-port-attempts",
+        default=100,
+        type=positive_int,
+        help="Maximum number of ports to try when auto-find is enabled. Defaults to 100.",
+    )
+    return parser.parse_args()
+
+
+def create_server(host, start_port, handler, auto_find_port=True, max_attempts=100):
+    """Bind to start_port, optionally trying following ports if unavailable."""
+    attempts = max_attempts if auto_find_port else 1
+    end_port = min(65535, start_port + attempts - 1)
+
+    for port in range(start_port, end_port + 1):
         try:
             return port, ReusableTCPServer((host, port), handler)
         except OSError as exc:
             if exc.errno not in {48, 98}:  # EADDRINUSE on macOS/BSD and Linux
                 raise
+            if not auto_find_port:
+                raise
 
-    end_port = start_port + max_attempts - 1
     raise RuntimeError(f"No available port found from {start_port} to {end_port}")
 
 
+def ensure_initial_bundle(project_root):
+    """Ensure server mode has a bundle to load after a fresh S2I clone."""
+    bundle_path = project_root / "data" / "bundle.json"
+    if bundle_path.exists():
+        return
+
+    dot_candidates = [
+        project_root / "truthgraph.dot",
+        project_root / "dependency.gv",
+    ]
+    dot_path = next((path for path in dot_candidates if path.exists()), None)
+
+    if dot_path is not None:
+        print(f"Bundle not found. Generating from: {dot_path}")
+        subprocess.run(
+            [
+                sys.executable,
+                str(project_root / "preprocess" / "build_bundle.py"),
+                str(dot_path),
+                str(bundle_path),
+            ],
+            cwd=project_root,
+            check=True,
+        )
+        return
+
+    print("Bundle not found and no DOT file is available. Creating an empty bundle.")
+    bundle_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(bundle_path, "w", encoding="utf-8") as f:
+        json.dump(EMPTY_BUNDLE, f, indent=2)
+
+
 def main():
-    START_PORT = 8009
-    HOST = 'localhost'
+    args = parse_args()
 
     # Change to project root directory
     project_root = Path(__file__).parent
     os.chdir(project_root)
+    ensure_initial_bundle(project_root)
 
-    port, httpd = create_server(HOST, START_PORT, CORSRequestHandler)
+    port, httpd = create_server(
+        args.host,
+        args.start_port,
+        CORSRequestHandler,
+        auto_find_port=args.auto_find_port,
+        max_attempts=args.max_port_attempts,
+    )
 
     print("=" * 60)
     print("Truth Graph Viewer Server")
     print("=" * 60)
     print(f"\nServing from: {project_root}")
-    print(f"Server address: http://{HOST}:{port}")
-    print(f"Application URL: http://{HOST}:{port}/app/")
+    print(f"Server address: http://{args.host}:{port}")
+    print(f"Application URL: http://{args.host}:{port}/app/")
     print("\nPress Ctrl+C to stop the server")
     print("=" * 60)
     print()

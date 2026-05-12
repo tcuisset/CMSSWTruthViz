@@ -18,6 +18,7 @@ const GraphManager = {
     graphName: '',
     hideGenEventNodes: true,
     hideSimVertexKey0Node: true,
+    hidePartonShower: false,
     hideSmallDisconnectedSubgraphs: true,
     smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
@@ -231,12 +232,13 @@ const GraphManager = {
     },
 
     getDagreEdgeWeight(edge) {
-        const vertexEndpoints = [edge.source(), edge.target()].filter(node => this.isLogicalVertex(node));
-        const energy = vertexEndpoints
-            .map(node => this.getNodeEnergy(node))
-            .find(value => Number.isFinite(value) && value > 0);
+        return 1; // attempt to get high energy edges straight
+        // const vertexEndpoints = [edge.source(), edge.target()].filter(node => this.isLogicalVertex(node));
+        // const energy = vertexEndpoints
+        //     .map(node => this.getNodeEnergy(node))
+        //     .find(value => Number.isFinite(value) && value > 0);
 
-        return energy ? Math.max(1, Math.log1p(energy)) : 1;
+        // return energy ? Math.max(1, Math.log1p(energy)) : 1;
     },
 
     hasCrossedBoundary(ele) {
@@ -428,6 +430,12 @@ const GraphManager = {
                     }
                 },
                 {
+                    selector: 'node.parton-shower-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
                     selector: 'node.small-subgraph-filtered',
                     style: {
                         'display': 'none'
@@ -466,6 +474,12 @@ const GraphManager = {
                 },
                 {
                     selector: 'edge.sim-vertex-key0-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge.parton-shower-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -762,6 +776,14 @@ const GraphManager = {
             });
         }
 
+        const hidePartonShowerCheckbox = document.getElementById('hide-parton-shower-checkbox');
+        if (hidePartonShowerCheckbox) {
+            hidePartonShowerCheckbox.checked = this.hidePartonShower;
+            hidePartonShowerCheckbox.addEventListener('change', () => {
+                this.setHidePartonShower(hidePartonShowerCheckbox.checked);
+            });
+        }
+
         const layoutEngineSelect = document.getElementById('layout-engine-select');
         if (layoutEngineSelect) {
             layoutEngineSelect.value = this.selectedLayoutEngine;
@@ -798,6 +820,7 @@ const GraphManager = {
     applyInitialViewFilters() {
         this.applyGenEventFilter();
         this.applySimVertexKey0Filter();
+        this.applyPartonShowerFilter();
         this.applySmallDisconnectedSubgraphFilter();
         this.relayoutVisible();
     },
@@ -867,6 +890,143 @@ const GraphManager = {
         const labelAttribute = node.data('rawLabel') || node.data('label') || '';
         const label = String(labelAttribute);
         return label.includes('SimVertex') && /\bkey=0\b/.test(label);
+    },
+
+    /**
+     * Hide status=2 gluons and add temporary edges from their parents to children.
+     */
+    setHidePartonShower(shouldHide) {
+        this.hidePartonShower = shouldHide;
+        this.applyPartonShowerFilter();
+        this.relayoutVisible();
+    },
+
+    applyPartonShowerFilter() {
+        this.cy.edges('[isPartonShowerBypass]').remove();
+        this.cy.nodes().removeClass('parton-shower-filtered');
+        this.cy.edges().removeClass('parton-shower-filtered');
+
+        if (!this.hidePartonShower) {
+            return;
+        }
+
+        const partonShowerNodes = this.cy.nodes().filter(node => this.isPartonShowerNode(node));
+        const parentVertices = this.getSingleChildParentVertices(partonShowerNodes);
+        const hiddenNodes = partonShowerNodes.union(parentVertices);
+
+        hiddenNodes.addClass('parton-shower-filtered');
+        hiddenNodes.connectedEdges().addClass('parton-shower-filtered');
+        this.addPartonShowerBypassEdges(hiddenNodes);
+    },
+
+    isPartonShowerNode(node) {
+        const status = Number.parseInt(node.data('status'), 10);
+        return (status > 30 && status < 70) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
+    },
+
+    getSingleChildParentVertices(partonShowerNodes) {
+        let parentVertices = this.cy.collection();
+
+        partonShowerNodes.forEach(node => {
+            node.incomers('node').forEach(parent => {
+                if (this.isSingleChildParentVertex(parent, node)) {
+                    parentVertices = parentVertices.union(parent);
+                }
+            });
+        });
+
+        return parentVertices;
+    },
+
+    isSingleChildParentVertex(parent, child) {
+        if (!this.isVertexNode(parent)) {
+            return false;
+        }
+
+        const children = parent.outgoers('node');
+        return children.length === 1 && children[0].id() === child.id();
+    },
+
+    isVertexNode(node) {
+        const type = this.getNodeKind(node);
+        const shape = String(node.data('shape') || '').trim();
+        return type === 'GenVertex'
+            || type === 'SimVertex'
+            || type === 'GenSimVertex'
+            || type === 'LogicalVertex'
+            || shape === 'diamond'
+            || this.isLogicalVertex(node);
+    },
+
+    addPartonShowerBypassEdges(hiddenNodes) {
+        const hiddenIds = new Set(hiddenNodes.map(node => node.id()));
+        const edgeKeys = new Set(this.cy.edges().map(edge => `${edge.source().id()}->${edge.target().id()}`));
+        const bypassEdges = [];
+
+        hiddenNodes.forEach(node => {
+            const parents = this.getVisibleBoundaryNodes(node, 'in', hiddenIds);
+            const children = this.getVisibleBoundaryNodes(node, 'out', hiddenIds);
+
+            parents.forEach(parent => {
+                children.forEach(child => {
+                    if (parent.id() === child.id()) {
+                        return;
+                    }
+
+                    const edgeKey = `${parent.id()}->${child.id()}`;
+                    if (edgeKeys.has(edgeKey)) {
+                        return;
+                    }
+
+                    edgeKeys.add(edgeKey);
+                    bypassEdges.push({
+                        group: 'edges',
+                        data: {
+                            id: `parton-shower-bypass-${parent.id()}-${child.id()}`,
+                            source: parent.id(),
+                            target: child.id(),
+                            isPartonShowerBypass: true
+                        }
+                    });
+                });
+            });
+        });
+
+        if (bypassEdges.length > 0) {
+            this.cy.add(bypassEdges);
+        }
+    },
+
+    getVisibleBoundaryNodes(startNode, direction, hiddenIds) {
+        const visited = new Set([startNode.id()]);
+        const stack = [startNode];
+        const boundaryNodes = this.cy.collection();
+        const useIncoming = direction === 'in';
+
+        while (stack.length > 0) {
+            const node = stack.pop();
+            const edges = useIncoming ? node.incomers('edge') : node.outgoers('edge');
+
+            edges.forEach(edge => {
+                if (edge.data('isPartonShowerBypass')) {
+                    return;
+                }
+
+                const nextNode = useIncoming ? edge.source() : edge.target();
+                if (visited.has(nextNode.id())) {
+                    return;
+                }
+
+                visited.add(nextNode.id());
+                if (hiddenIds.has(nextNode.id())) {
+                    stack.push(nextNode);
+                } else {
+                    boundaryNodes.merge(nextNode);
+                }
+            });
+        }
+
+        return boundaryNodes;
     },
 
     /**
@@ -1069,6 +1229,7 @@ const GraphManager = {
         this.cy.edges().removeClass('highlighted dimmed selected hidden');
         this.applyGenEventFilter();
         this.applySimVertexKey0Filter();
+        this.applyPartonShowerFilter();
         this.applySmallDisconnectedSubgraphFilter();
         this.fitVisible();
     },
@@ -1391,6 +1552,7 @@ const GraphManager = {
         return !node.hasClass('hidden')
             && !node.hasClass('gen-event-filtered')
             && !node.hasClass('sim-vertex-key0-filtered')
+            && !node.hasClass('parton-shower-filtered')
             && !node.hasClass('small-subgraph-filtered');
     },
 
@@ -1398,6 +1560,7 @@ const GraphManager = {
         return !edge.hasClass('hidden')
             && !edge.hasClass('gen-event-filtered')
             && !edge.hasClass('sim-vertex-key0-filtered')
+            && !edge.hasClass('parton-shower-filtered')
             && !edge.hasClass('small-subgraph-filtered')
             && this.isNodeVisibleForLayout(edge.source())
             && this.isNodeVisibleForLayout(edge.target());
