@@ -6,7 +6,12 @@
 const GraphManager = {
     cy: null,
     fullGraph: null,
+    activeLayout: null,
+    layoutRunId: 0,
+    canceledLayoutRunId: null,
+    selectedLayoutEngine: 'dagre',
     dagreRegistered: false,
+    fcoseRegistered: false,
     graphName: '',
     hideGenEventNodes: true,
     hideSimVertexKey0Node: true,
@@ -88,6 +93,91 @@ const GraphManager = {
         return shape === 'diamond' || /^v\d+$/.test(ele.id());
     },
 
+    isParticleNode(ele) {
+        const type = this.getNodeKind(ele);
+        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return true;
+
+        const particleId = ele.data('pdgId') ?? ele.data('pdgid') ?? ele.data('pid') ?? ele.data('pdg');
+        if (particleId !== undefined && particleId !== null && String(particleId) !== '0') return true;
+
+        const shape = String(ele.data('shape') || '').trim();
+        return shape === 'ellipse' || /^p\d+$/.test(ele.id());
+    },
+
+    getCompactLabelFromData(data) {
+        const dataAccessor = {
+            id: () => data.id,
+            data: key => data[key]
+        };
+
+        if (this.isLogicalVertex(dataAccessor)) {
+            return this.getVertexKeyFromData(data) || data.id;
+        }
+
+        if (this.isParticleNode(dataAccessor)) {
+            return this.getParticleNameFromData(data) || data.id;
+        }
+
+        return data.displayLabel || data.label || data.id;
+    },
+
+    getParticleNameFromData(data) {
+        const explicitName = data.particleName || data.particle_name || data.niceName || data.niceParticleName;
+        if (explicitName) return String(explicitName);
+
+        const displayMatch = String(data.displayLabel || data.label || '').match(/^particle:\s*(.+)$/im);
+        if (displayMatch) return displayMatch[1].trim();
+
+        const rawMatch = String(data.rawLabel || '').match(/\bpid:\s*([^(<\n]+)/i);
+        if (rawMatch) return rawMatch[1].trim();
+
+        const particleId = data.pdgId ?? data.pdgid ?? data.pid ?? data.pdg;
+        return particleId !== undefined && particleId !== null ? String(particleId) : '';
+    },
+
+    getVertexKeyFromData(data) {
+        const explicitKey = data.key ?? data.vertexKey ?? data.vertex_key ?? data.barcode;
+        if (explicitKey !== undefined && explicitKey !== null) return String(explicitKey);
+
+        const text = `${data.rawLabel || ''}\n${data.detailLabel || ''}`;
+        const match = text.match(/\b(?:GenVertex|SimVertex)[^<\n]*\bkey=([^\s<]+)/i)
+            || text.match(/\bkey=([^\s<]+)/i);
+        if (match) return match[1];
+
+        const idMatch = String(data.id || '').match(/^v(\d+)$/);
+        return idMatch ? idMatch[1] : '';
+    },
+
+    extractFourthTupleValue(value) {
+        if (typeof value !== 'string') return null;
+
+        const cleaned = value.trim().replace(/^<|>$/g, '').trim();
+        if (!cleaned.startsWith('(') || !cleaned.endsWith(')')) return null;
+
+        const parts = cleaned.slice(1, -1).split(',').map(part => part.trim());
+        if (parts.length < 4) return null;
+
+        const parsed = Number.parseFloat(parts[3]);
+        return Number.isFinite(parsed) ? parsed : null;
+    },
+
+    getNodeEnergy(ele) {
+        const explicitEnergy = Number.parseFloat(ele.data('energy'));
+        if (Number.isFinite(explicitEnergy)) return explicitEnergy;
+
+        return this.extractFourthTupleValue(ele.data('p4'))
+            ?? this.extractFourthTupleValue(ele.data('x4'));
+    },
+
+    getDagreEdgeWeight(edge) {
+        const vertexEndpoints = [edge.source(), edge.target()].filter(node => this.isLogicalVertex(node));
+        const energy = vertexEndpoints
+            .map(node => this.getNodeEnergy(node))
+            .find(value => Number.isFinite(value) && value > 0);
+
+        return energy ? Math.max(1, Math.log1p(energy)) : 1;
+    },
+
     hasCrossedBoundary(ele) {
         const value = ele.data('crossedBoundary');
         return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
@@ -110,10 +200,12 @@ const GraphManager = {
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 'star';
         if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 'diamond';
-        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return 'rectangle';
+        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return 'ellipse';
+        if (this.isParticleNode(ele)) return 'ellipse';
 
         const shape = ele.data('shape');
         if (shape === 'diamond') return 'diamond';
+        if (shape === 'ellipse') return 'ellipse';
         if (shape === 'box') return 'rectangle';
         return 'rectangle';
     },
@@ -121,8 +213,12 @@ const GraphManager = {
     getNodeSize(ele) {
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 88;
-        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 52;
-        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return 74;
+        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 30;
+        if (this.isLogicalVertex(ele)) return 30;
+        if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle' || this.isParticleNode(ele)) {
+            const labelLength = String(ele.data('label') || '').length;
+            return Math.min(58, Math.max(32, labelLength * 7 + 12));
+        }
         return 'label';
     },
 
@@ -136,8 +232,8 @@ const GraphManager = {
     },
 
     getNodeBorderWidth(ele) {
-        if (this.isLogicalGenSimNode(ele)) return 5;
-        return this.hasCrossedBoundary(ele) ? 5 : 2;
+        if (this.isLogicalGenSimNode(ele)) return 3;
+        return this.hasCrossedBoundary(ele) ? 3 : 1;
     },
 
     /**
@@ -146,23 +242,15 @@ const GraphManager = {
     init(data) {
         console.log('Initializing graph with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
         this.graphName = data.metadata?.graph_name || data.graph_name || '';
-
-        if (!this.dagreRegistered && typeof cytoscapeDagre === 'function') {
-            try {
-                cytoscape.use(cytoscapeDagre);
-                this.dagreRegistered = true;
-            } catch (error) {
-                console.warn('Could not register cytoscape-dagre; falling back to breadthfirst layout', error);
-            }
-        }
+        this.registerLayoutExtensions();
 
         // Convert data to Cytoscape format
         const elements = {
             nodes: data.nodes.map(n => ({
                 data: {
                     id: n.id,
-                    label: n.displayLabel || n.label || n.id,
-                    ...n
+                    ...n,
+                    label: this.getCompactLabelFromData(n)
                 }
             })),
             edges: data.edges.map(e => ({
@@ -185,18 +273,21 @@ const GraphManager = {
                 {
                     selector: 'node',
                     style: {
-                        'padding': 10,
+                        'padding': 2,
                         'label': 'data(label)',
                         'text-valign': 'center',
                         'text-halign': 'center',
-                        'font-size': 8,
+                        'font-size': 10,
+                        'font-weight': 600,
                         'text-wrap': 'wrap',
-                        'text-max-width': 180,
-                        'line-height': 1.25,
+                        'text-max-width': function(ele) {
+                            const size = GraphManager.getNodeSize(ele);
+                            return Number.isFinite(size) ? Math.max(22, size - 4) : 80;
+                        },
+                        'line-height': 1,
                         'color': '#000',
-                        'text-background-color': 'rgba(255, 255, 255, 0.7)',
-                        'text-background-opacity': 1,
-                        'text-background-padding': 2,
+                        'text-background-opacity': 0,
+                        'text-background-padding': 0,
                         'text-background-shape': 'roundrectangle',
                         'background-color': function(ele) {
                             return GraphManager.getNodeFillColor(ele);
@@ -333,7 +424,10 @@ const GraphManager = {
                 }
             ],
 
-            layout: this.getLayoutConfig(),
+            layout: {
+                name: 'preset',
+                fit: false
+            },
 
             minZoom: 0.02,
             maxZoom: 3,
@@ -346,15 +440,55 @@ const GraphManager = {
         // Event handlers
         this.setupEventHandlers();
         this.setupViewOptions();
+        this.applyInitialViewFilters();
 
         console.log('Graph initialized successfully');
         return this.cy;
     },
 
     /**
-     * Prefer dagre when its extension is available, otherwise use a built-in hierarchical layout.
+     * Register optional Cytoscape layout extensions loaded from index.html.
+     */
+    registerLayoutExtensions() {
+        if (!this.dagreRegistered && typeof cytoscapeDagre === 'function') {
+            try {
+                cytoscape.use(cytoscapeDagre);
+                this.dagreRegistered = true;
+            } catch (error) {
+                console.warn('Could not register cytoscape-dagre', error);
+            }
+        }
+
+        if (!this.fcoseRegistered && typeof cytoscapeFcose === 'function') {
+            try {
+                cytoscape.use(cytoscapeFcose);
+                this.fcoseRegistered = true;
+            } catch (error) {
+                console.warn('Could not register cytoscape-fcose', error);
+            }
+        }
+    },
+
+    /**
+     * Layout configuration for the selected engine.
      */
     getLayoutConfig() {
+        if (this.selectedLayoutEngine === 'fcose' && this.fcoseRegistered) {
+            return {
+                name: 'fcose',
+                animate: false,
+                quality: 'proof',
+                // randomize: false,
+                fit: false,
+                // padding: 30,
+                // nodeRepulsion: 4500,
+                // idealEdgeLength: 55,
+                // edgeElasticity: 0.45,
+                // gravity: 0.25,
+                numIter: 8000
+            };
+        }
+
         if (this.dagreRegistered) {
             return {
                 name: 'dagre',
@@ -365,8 +499,9 @@ const GraphManager = {
                 edgeSep: 16,
                 rankSep: 90,
                 spacingFactor: 1.1,
-                fit: true,
-                padding: 30
+                fit: false,
+                padding: 30,
+                edgeWeight: edge => this.getDagreEdgeWeight(edge)
             };
         }
 
@@ -375,7 +510,7 @@ const GraphManager = {
             animate: false,
             directed: true,
             spacingFactor: 1.1,
-            fit: true,
+            fit: false,
             padding: 30
         };
     },
@@ -453,6 +588,45 @@ const GraphManager = {
                 this.setHideSimVertexKey0Node(hideSimVertexKey0Checkbox.checked);
             });
         }
+
+        const layoutEngineSelect = document.getElementById('layout-engine-select');
+        if (layoutEngineSelect) {
+            layoutEngineSelect.value = this.selectedLayoutEngine;
+            layoutEngineSelect.addEventListener('change', () => {
+                this.setLayoutEngine(layoutEngineSelect.value);
+            });
+        }
+
+        const layoutRedoBtn = document.getElementById('layout-redo-btn');
+        if (layoutRedoBtn) {
+            layoutRedoBtn.addEventListener('click', () => this.relayoutVisible());
+        }
+
+        const layoutCancelBtn = document.getElementById('layout-cancel-btn');
+        if (layoutCancelBtn) {
+            layoutCancelBtn.addEventListener('click', () => this.cancelActiveLayout());
+        }
+    },
+
+    /**
+     * Switch layout engines and recompute positions for visible elements.
+     */
+    setLayoutEngine(engine) {
+        if (engine !== 'dagre' && engine !== 'fcose') {
+            return;
+        }
+
+        this.selectedLayoutEngine = engine;
+        this.relayoutVisible();
+    },
+
+    /**
+     * Apply default view filters after Cytoscape elements exist.
+     */
+    applyInitialViewFilters() {
+        this.applyGenEventFilter();
+        this.applySimVertexKey0Filter();
+        this.relayoutVisible();
     },
 
     /**
@@ -665,6 +839,7 @@ const GraphManager = {
 
         if (visibleNodes.length === 0) {
             this.cy.fit();
+            this.hideLayoutStatus();
             return;
         }
 
@@ -673,8 +848,79 @@ const GraphManager = {
         });
 
         const layout = visibleNodes.union(visibleEdges).layout(this.getLayoutConfig());
-        layout.one('layoutstop', () => this.fitVisible());
+        this.runLayout(layout);
+    },
+
+    /**
+     * Run a layout with status UI and cancellation support.
+     */
+    runLayout(layout) {
+        this.cancelActiveLayout({ silent: true });
+
+        const runId = this.layoutRunId + 1;
+        this.layoutRunId = runId;
+        this.canceledLayoutRunId = null;
+        this.activeLayout = layout;
+        this.showLayoutStatus();
+
+        layout.one('layoutstop', () => {
+            if (this.layoutRunId !== runId) {
+                return;
+            }
+
+            this.activeLayout = null;
+            if (this.canceledLayoutRunId !== runId) {
+                this.fitVisible();
+            }
+            this.hideLayoutStatus();
+        });
+
         layout.run();
+    },
+
+    /**
+     * Stop the currently running layout, if the engine supports interruption.
+     */
+    cancelActiveLayout(options = {}) {
+        if (!this.activeLayout) {
+            return;
+        }
+
+        const layout = this.activeLayout;
+        this.canceledLayoutRunId = this.layoutRunId;
+        this.activeLayout = null;
+
+        if (typeof layout.stop === 'function') {
+            layout.stop();
+        }
+
+        if (!options.silent) {
+            this.hideLayoutStatus();
+        }
+    },
+
+    showLayoutStatus() {
+        const status = document.getElementById('layout-status');
+        const statusText = document.getElementById('layout-status-text');
+        if (!status) {
+            return;
+        }
+
+        if (statusText) {
+            statusText.textContent = `Running ${this.getSelectedLayoutLabel()} layout...`;
+        }
+        status.classList.remove('hidden');
+    },
+
+    hideLayoutStatus() {
+        const status = document.getElementById('layout-status');
+        if (status) {
+            status.classList.add('hidden');
+        }
+    },
+
+    getSelectedLayoutLabel() {
+        return this.selectedLayoutEngine === 'fcose' ? 'fCoSE' : 'Dagre';
     },
 
     /**

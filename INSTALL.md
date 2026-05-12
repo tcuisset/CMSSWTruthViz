@@ -113,79 +113,8 @@ chmod +x run.sh
 ./run.sh
 ```
 
----
-
-### Windows (WSL2)
-
-**Recommended:** Use Windows Subsystem for Linux 2 (WSL2) with Ubuntu.
-
-**1. Enable WSL2:**
-
-Open PowerShell as Administrator and run:
-
-```powershell
-wsl --install
-```
-
-**2. Install Ubuntu from Microsoft Store**
-
-**3. Open Ubuntu terminal and follow Ubuntu instructions:**
-
-```bash
-sudo apt update
-sudo apt install python3 python3-pip python3-venv graphviz
-cd /mnt/c/path/to/CMSSWGraph
-chmod +x run.sh
-./run.sh
-```
-
-**4. Open browser on Windows:**
-
-Navigate to: http://localhost:8000/app/
-
----
-
-### Windows (Native Python)
-
-**Not recommended** due to graphviz complexity. Use WSL2 instead.
-
-If you must use native Windows:
-
-**1. Install Python 3.6+:**
-- Download from: https://www.python.org/downloads/
-- Check "Add Python to PATH" during installation
-
-**2. Install graphviz:**
-- Download from: https://graphviz.org/download/
-- Add graphviz bin directory to PATH
-
-**3. Run manually:**
-
-```cmd
-cd CMSSWGraph
-python -m venv venv
-venv\Scripts\activate
-pip install -r preprocess\requirements.txt
-python preprocess\build_bundle.py
-python server.py
-```
-
----
 
 ## Troubleshooting Installation
-
-### Python Version Too Old
-
-**Error:** `Python 3.5 or lower detected`
-
-**Solution:**
-
-```bash
-# Ubuntu/Debian - install newer Python
-sudo apt install python3.8 python3.8-venv python3-pip
-
-# Update run.sh to use python3.8 instead of python3
-```
 
 ### graphviz Not Found
 
@@ -207,31 +136,7 @@ brew install graphviz
 dot -V
 ```
 
-### pip Not Found
 
-**Error:** `pip: command not found`
-
-**Solution:**
-
-```bash
-# Ubuntu/Debian
-sudo apt install python3-pip
-
-# Or use python3 -m pip instead
-python3 -m pip install -r preprocess/requirements.txt
-```
-
-### Virtual Environment Creation Fails
-
-**Error:** `The virtual environment was not created successfully`
-
-**Solution:**
-
-```bash
-# Install venv module
-sudo apt install python3-venv  # Ubuntu/Debian
-sudo yum install python3-venv  # CentOS/RHEL
-```
 
 ### Permission Denied on run.sh
 
@@ -241,20 +146,6 @@ sudo yum install python3-venv  # CentOS/RHEL
 
 ```bash
 chmod +x run.sh
-```
-
-### Port 8000 Already in Use
-
-**Error:** `OSError: [Errno 98] Address already in use`
-
-**Solution:**
-
-```bash
-# Find process using port 8000
-lsof -i :8000  # macOS/Linux
-netstat -ano | findstr :8000  # Windows
-
-# Kill the process or edit server.py to use a different port
 ```
 
 ---
@@ -330,17 +221,7 @@ rm -f data/bundle.json
 ---
 
 ## System Requirements
-
-**Minimum:**
-- CPU: 1 core
-- RAM: 2 GB
-- Disk: 500 MB (for application + bundle)
-- Browser: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
-
 **Recommended:**
-- CPU: 2+ cores
-- RAM: 4 GB
-- Disk: 1 GB
 - Browser: Latest version of Chrome or Firefox
 
 **Network:**
@@ -349,13 +230,6 @@ rm -f data/bundle.json
 
 ---
 
-## Docker Installation (Alternative)
-
-**Coming soon:** Docker image for easier deployment.
-
-For now, use the native installation methods above.
-
----
 
 ## Getting Help
 

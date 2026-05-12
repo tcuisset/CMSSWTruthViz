@@ -6,6 +6,7 @@ Extracts nodes, edges, and builds label-to-ID mapping.
 
 import sys
 import json
+import re
 import pydot
 import networkx as nx
 from pathlib import Path
@@ -79,6 +80,33 @@ def particle_name_from_id(particle_id):
     return name
 
 
+def particle_id_from_attrs(data_attrs):
+    """Return the particle identifier stored by known DOT producers."""
+    return (
+        data_attrs.get("pdgId")
+        or data_attrs.get("pdgid")
+        or data_attrs.get("pid")
+        or data_attrs.get("pdg")
+    )
+
+
+def vertex_key_from_attrs(node_id, attrs, data_attrs):
+    """Return the vertex key for compact on-canvas labels."""
+    for key in ("key", "vertexKey", "vertex_key", "barcode"):
+        if key in data_attrs:
+            return str(data_attrs[key])
+
+    raw_label = clean_attr_value(attrs.get("label", ""))
+    label_match = (
+        re.search(r"\b(?:GenVertex|SimVertex)[^<\n]*\bkey=([^\s<]+)", raw_label, re.I)
+        or re.search(r"\bkey=([^\s<]+)", raw_label, re.I)
+    )
+    if label_match:
+        return label_match.group(1)
+
+    return node_id[1:] if node_id.startswith("v") and node_id[1:].isdigit() else node_number(node_id)
+
+
 def build_display_label(node_id, attrs):
     """Build the default node label shown in Cytoscape."""
     data_attrs = {
@@ -87,26 +115,18 @@ def build_display_label(node_id, attrs):
         if key not in GRAPH_STYLE_ATTRIBUTES and key != "shape"
     }
 
-    label_parts = [f"node: {node_number(node_id)}"]
+    shape = clean_attr_value(attrs.get("shape", ""))
+    if shape == "diamond" or (node_id.startswith("v") and node_id[1:].isdigit()):
+        return vertex_key_from_attrs(node_id, attrs, data_attrs)
 
-    particle_id = (
-        data_attrs.get("pdgId")
-        or data_attrs.get("pdgid")
-        or data_attrs.get("pid")
-        or data_attrs.get("pdg")
-    )
-    if particle_id is not None:
+    particle_id = particle_id_from_attrs(data_attrs)
+    if particle_id is not None and str(particle_id) != "0":
         particle_name = particle_name_from_id(particle_id)
         if particle_name:
-            label_parts.append(f"particle: {particle_name}")
-        else:
-            label_parts.append(f"pdgId/pid: {particle_id}")
+            return particle_name
+        return str(particle_id)
 
-    energy = fourth_tuple_value(data_attrs.get("p4")) or fourth_tuple_value(data_attrs.get("x4"))
-    if energy is not None:
-        label_parts.append(f"E: {energy}")
-
-    return "\n".join(label_parts)
+    return f"node: {node_number(node_id)}"
 
 
 def build_detail_label(node_id, attrs):
@@ -194,6 +214,14 @@ def parse_dot_file(dot_path):
         raw_label = clean_attrs.get("label")
         label = build_display_label(node_id, clean_attrs)
         detail_label = build_detail_label(node_id, clean_attrs)
+        data_attrs = {
+            key: clean_attr_value(value)
+            for key, value in clean_attrs.items()
+            if key not in GRAPH_STYLE_ATTRIBUTES and key != "shape"
+        }
+        particle_id = particle_id_from_attrs(data_attrs)
+        particle_name = particle_name_from_id(particle_id) if particle_id is not None else None
+        vertex_key = vertex_key_from_attrs(node_id, clean_attrs, data_attrs) if clean_attrs.get("shape") == "diamond" else None
 
         # Build node object
         node_obj = {
@@ -203,6 +231,10 @@ def parse_dot_file(dot_path):
             "detailLabel": detail_label,
             "rawLabel": raw_label,
         }
+        if particle_name:
+            node_obj["particleName"] = particle_name
+        if vertex_key:
+            node_obj["vertexKey"] = vertex_key
 
         # Add all other attributes
         for key, value in clean_attrs.items():

@@ -25,41 +25,6 @@ Common workflows and examples for using the CMSSW Graph Visualization tool.
 
 ---
 
-### View All HLT Modules
-
-**Task:** See only High-Level Trigger modules
-
-**Steps:**
-1. Click **None** button (deselects all filters)
-2. Check **Analysis** (stage filter)
-3. Check **HLT** (specific filter)
-4. Check **Producer**, **Filter**, **Analyzer** (type filters)
-
-**Result:** Graph shows only HLT modules
-
----
-
-### Explore a Module's Inputs
-
-**Task:** Find what "hgcalMergeLayerClusters" depends on
-
-**Steps:**
-1. Click on the module to open its panel
-2. Look at the **Input Tags** section
-3. Click any InputTag to navigate to that producer module
-
-**Example InputTags you might see:**
-```
-layerClusters (VInputTag)
-  ├─ hgcalLayerClustersEE
-  ├─ hgcalLayerClustersHSi
-  └─ hgcalLayerClustersHSci
-```
-
-**Result:** You can trace back the data flow by clicking each input
-
----
-
 ### Find All Dependencies
 
 **Task:** Show complete dependency tree for a module (depth 3)
@@ -74,38 +39,6 @@ layerClusters (VInputTag)
 ---
 
 ## Investigation Workflows
-
-### Workflow 1: Understand Data Flow for Output
-
-**Scenario:** You want to understand how a specific output is produced
-
-**Example:** Investigate how merged layer clusters are created
-
-**Steps:**
-
-1. **Find the final module:**
-   ```
-   Search: "hgcalMergeLayerClusters"
-   ```
-
-2. **Check its inputs:**
-   - Panel shows VInputTag with 3 inputs
-   - Click each to see what they are
-
-3. **Trace upstream (depth 2):**
-   - Select the module
-   - Depth: `2`
-   - Click **Upstream Only**
-
-4. **Examine each producer:**
-   - Click through InputTags to see their configurations
-   - Use breadcrumbs to navigate back
-
-5. **Result:**
-   - You now see the 2-level dependency chain
-   - You understand which raw inputs feed into this output
-
----
 
 ### Workflow 2: Find Who Uses a Module's Output
 
@@ -131,33 +64,6 @@ layerClusters (VInputTag)
 4. **Result:**
    - List of all affected modules
    - Understanding of impact radius
-
----
-
-### Workflow 3: Compare PAT vs Reco Modules
-
-**Scenario:** Understand the difference in module counts between workflows
-
-**Steps:**
-
-1. **View Reco modules only:**
-   - Uncheck **Analysis**
-   - Check **Reco**
-   - Note the stats: "Showing X nodes"
-
-2. **View Analysis modules only:**
-   - Uncheck **Reco**
-   - Check **Analysis**
-   - Note the stats: "Showing Y nodes"
-
-3. **View PAT subset:**
-   - Keep **Analysis** checked
-   - Check **PAT** only
-   - Note the stats: "Showing Z nodes"
-
-4. **Result:**
-   - You can see the relative sizes
-   - Example: Reco 631 (48%), Analysis 684 (52%), PAT ~110
 
 ---
 
@@ -221,32 +127,6 @@ layerClusters (VInputTag)
 
 ---
 
-### Scenario 2: Analyze Filter Impact
-
-**Task:** See how many EDFilters are in the HLT path
-
-**Steps:**
-
-1. **Filter to HLT:**
-   - Uncheck **Reco**, **PAT**
-   - Check **Analysis**, **HLT**
-   - Check all type filters
-
-2. **Count total:**
-   - Note stats: "Showing X nodes"
-
-3. **Filter to HLT EDFilters only:**
-   - Uncheck **Producer**, **Analyzer**
-   - Keep **Filter** checked
-
-4. **Count filters:**
-   - Note stats: "Showing Y nodes"
-   - Calculate percentage: Y/X
-
-**Result:** You know what fraction of HLT modules are filters
-
----
-
 ### Scenario 3: Keyboard-Based Exploration
 
 **Task:** Browse the graph without using the mouse
@@ -305,86 +185,7 @@ layerClusters (VInputTag)
 
 ---
 
-### Scenario 5: Identify Bottlenecks (Using External Data)
-
-**Task:** Overlay execution time data (if available) to find slow modules
-
-**Current Limitation:** Tool doesn't support this yet
-
-**Workaround:**
-
-1. **Get timing data externally** (e.g., from CMSSW logs)
-
-2. **Search for slow modules** one by one:
-   ```
-   Search: "slowModule1"
-   → Check its dependencies
-
-   Search: "slowModule2"
-   → Check its dependencies
-   ```
-
-3. **Manually correlate:**
-   - Note if slow modules share dependencies
-   - Look for common upstream modules
-
-**Future Enhancement:** Could add timing data overlay with color-coded nodes
-
----
-
 ## Common Patterns
-
-### Pattern 1: Data Producer → Consumer Chain
-
-```
-rawHits (Producer)
-    ↓
-clusters (Producer, depends on rawHits)
-    ↓
-tracks (Producer, depends on clusters)
-    ↓
-vertices (Producer, depends on tracks)
-```
-
-**How to trace:**
-- Start at "vertices"
-- Click its InputTag "tracks"
-- Click "tracks" InputTag "clusters"
-- Continue backwards
-
----
-
-### Pattern 2: Filter Cascade
-
-```
-trigger (Filter)
-    ↓ (if pass)
-selection (Filter)
-    ↓ (if pass)
-analysis (Analyzer)
-```
-
-**How to see:**
-- Search for "analysis"
-- Upstream Only, Depth 2
-- Diamond shapes are filters
-
----
-
-### Pattern 3: VInputTag Merge
-
-```
-dataA (Producer) ┐
-dataB (Producer) ├─→ merger (Producer, VInputTag)
-dataC (Producer) ┘
-```
-
-**How to identify:**
-- Panel shows VInputTag group
-- Multiple items in the group
-- Each clickable to its producer
-
----
 
 ## Tips for Large Graphs
 
@@ -421,22 +222,6 @@ dataC (Producer) ┘
 ---
 
 ## Troubleshooting Investigations
-
-### Issue: "InputTag not found"
-
-**Problem:** Panel shows red "Module not found in graph"
-
-**Possible causes:**
-1. Producer module not included in dependency.gv
-2. Module name differs between config and graph
-3. Module is in a different process (rare)
-
-**How to investigate:**
-- Check raw config to verify module name
-- Search for similar names in graph
-- Check if module is truly missing from DOT file
-
----
 
 ### Issue: "No dependencies shown"
 

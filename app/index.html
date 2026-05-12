@@ -40,6 +40,12 @@
                 </div>
 
                 <div class="control-group">
+                    <label for="layout-engine-select">Layout:</label>
+                    <select id="layout-engine-select">
+                        <option value="dagre">Dagre</option>
+                        <option value="fcose">fCoSE</option>
+                    </select>
+                    <button id="layout-redo-btn" type="button" title="Recompute the layout using only currently visible nodes">Redo Layout</button>
                     <label class="checkbox-label" for="hide-gen-event-checkbox">
                         <input type="checkbox" id="hide-gen-event-checkbox" />
                         Hide GenEvent
@@ -64,6 +70,10 @@
             <div id="graph-container">
                 <div id="cy"></div>
                 <div id="loading">Loading graph data...</div>
+                <div id="layout-status" class="hidden">
+                    <span id="layout-status-text">Running layout...</span>
+                    <button id="layout-cancel-btn" type="button">Cancel</button>
+                </div>
 
                 <!-- Legend -->
                 <div id="legend">
@@ -175,6 +185,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.min.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
     <script src="js/bundle.js"></script>

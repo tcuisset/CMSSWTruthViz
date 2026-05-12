@@ -47,8 +47,15 @@ const SearchManager = {
 
         // Find matching nodes (case-insensitive substring match)
         const matches = GraphManager.cy.nodes().filter(node => {
-            const label = node.data('label') || '';
-            return label.toLowerCase().includes(query.toLowerCase());
+            const searchableText = [
+                node.data('label'),
+                node.data('displayLabel'),
+                node.data('detailLabel'),
+                node.data('rawLabel'),
+                node.id()
+            ].filter(Boolean).join('\n');
+
+            return searchableText.toLowerCase().includes(query.toLowerCase());
         });
 
         if (matches.length === 0) {

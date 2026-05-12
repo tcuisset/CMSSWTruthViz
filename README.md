@@ -337,9 +337,9 @@ Click any previous module to jump back in the history.
 
 ### Graph Layout
 
-The graph uses a hierarchical Dagre layout, similar in spirit to Graphviz `dot`:
-- Directed ranks are laid out from top to bottom
-- Related modules are grouped by dependency depth
+The graph layout can be switched at runtime:
+- **Dagre**: hierarchical layout, similar in spirit to Graphviz `dot`
+- **fCoSE**: force-directed layout for compact clustered views
 - Node labels are visible by default with semi-transparent backgrounds
 
 ## Troubleshooting
@@ -395,7 +395,7 @@ Edit `app/js/graph.js` and change the layout configuration:
 
 ```javascript
 layout: {
-    name: 'dagre',  // Try: 'breadthfirst', 'concentric', 'cose'
+    name: 'dagre',  // Or: 'fcose'
     // ... other options
 }
 ```
