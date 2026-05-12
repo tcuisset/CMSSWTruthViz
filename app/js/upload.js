@@ -130,18 +130,12 @@ const UploadManager = {
                 body: formData
             });
 
-            const responseText = await response.text();
-            let result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (error) {
-                const message = response.ok
-                    ? 'Upload response was not valid JSON'
-                    : `Upload failed with HTTP ${response.status}`;
-                throw new Error(message);
-            }
+            const result = await this.parseJsonResponse(response, 'Upload');
 
             if (result.success) {
+                this.uploadStatus.textContent = 'Upload complete. Building bundle...';
+                await this.waitForBundleBuild();
+
                 this.uploadStatus.textContent = 'Bundle regenerated successfully! Reloading...';
 
                 // Wait a bit then reload the page
@@ -159,5 +153,61 @@ const UploadManager = {
 
             alert(`Upload failed: ${error.message}`);
         }
+    },
+
+    /**
+     * Parse a JSON response and produce a useful error for proxy/server HTML pages.
+     */
+    async parseJsonResponse(response, label) {
+        const responseText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (error) {
+            const message = response.ok
+                ? `${label} response was not valid JSON`
+                : `${label} failed with HTTP ${response.status}`;
+            throw new Error(message);
+        }
+
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || `${label} failed with HTTP ${response.status}`);
+        }
+
+        return result;
+    },
+
+    /**
+     * Poll the server until the asynchronous bundle build finishes.
+     */
+    async waitForBundleBuild() {
+        const startedAt = Date.now();
+        const timeoutMs = 60 * 60 * 1000;
+
+        while (Date.now() - startedAt < timeoutMs) {
+            await this.sleep(2000);
+
+            const response = await fetch('../upload-status');
+            const result = await this.parseJsonResponse(response, 'Build status');
+            const build = result.build || {};
+
+            if (build.state === 'success') {
+                return;
+            }
+
+            if (build.state === 'error') {
+                throw new Error(build.message || 'Bundle generation failed');
+            }
+
+            if (build.message) {
+                this.uploadStatus.textContent = build.message;
+            }
+        }
+
+        throw new Error('Bundle generation is still running after 60 minutes');
+    },
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 };

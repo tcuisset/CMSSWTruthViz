@@ -12,6 +12,8 @@ import os
 import sys
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import cgi
@@ -29,6 +31,86 @@ EMPTY_BUNDLE = {
     },
 }
 
+BUILD_STATUS_LOCK = threading.Lock()
+BUILD_STATUS = {
+    "state": "idle",
+    "message": "No bundle build is running.",
+    "startedAt": None,
+    "finishedAt": None,
+}
+
+
+def get_build_status():
+    """Return a copy of the current background bundle build state."""
+    with BUILD_STATUS_LOCK:
+        return dict(BUILD_STATUS)
+
+
+def set_build_status(**updates):
+    """Update the current background bundle build state."""
+    with BUILD_STATUS_LOCK:
+        BUILD_STATUS.update(updates)
+
+
+def run_bundle_build(project_root, dot_path):
+    """Regenerate the graph bundle in the background after an upload."""
+    try:
+        set_build_status(
+            state="running",
+            message="Regenerating graph bundle...",
+            startedAt=time.time(),
+            finishedAt=None,
+        )
+
+        print("\nRegenerating bundle...")
+        build_script = project_root / "preprocess" / "build_bundle.py"
+        build_args = [
+            sys.executable,
+            str(build_script),
+            str(dot_path),
+            str(project_root / "data" / "bundle.json")
+        ]
+
+        result = subprocess.run(
+            build_args,
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "unknown error"
+            print(f"  ERROR: {error_msg}")
+            set_build_status(
+                state="error",
+                message=f"Bundle generation failed: {error_msg}",
+                finishedAt=time.time(),
+            )
+            return
+
+        print("  Bundle generated successfully!")
+        print(result.stdout)
+        set_build_status(
+            state="success",
+            message="Bundle regenerated successfully.",
+            finishedAt=time.time(),
+        )
+
+    except subprocess.TimeoutExpired:
+        set_build_status(
+            state="error",
+            message="Bundle generation timed out.",
+            finishedAt=time.time(),
+        )
+    except Exception as e:
+        print(f"  ERROR: {str(e)}")
+        set_build_status(
+            state="error",
+            message=f"Bundle generation failed: {str(e)}",
+            finishedAt=time.time(),
+        )
+
 
 class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
     """HTTP request handler with CORS support and file upload"""
@@ -45,6 +127,18 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         """Handle OPTIONS requests for CORS preflight"""
         self.send_response(200)
         self.end_headers()
+
+    def do_GET(self):
+        """Handle status requests, then fall back to static file serving."""
+        path = urlparse(self.path).path.rstrip('/')
+        if path == '/upload-status' or path.endswith('/upload-status'):
+            self.send_json_response({
+                'success': True,
+                'build': get_build_status(),
+            })
+            return
+
+        super().do_GET()
 
     def do_POST(self):
         """Handle POST requests for file uploads"""
@@ -80,6 +174,13 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Get project root
             project_root = Path(__file__).parent
 
+            if get_build_status()["state"] in {"queued", "running"}:
+                self.send_json_response({
+                    'success': False,
+                    'error': 'A bundle build is already running'
+                }, 409)
+                return
+
             # Save files
             dot_path = project_root / "truthgraph.dot"
 
@@ -88,46 +189,25 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 f.write(dot_file.read())
             print(f"  Saved: {dot_path}")
 
-            # Run bundle generation
-            print("\nRegenerating bundle...")
-            build_script = project_root / "preprocess" / "build_bundle.py"
-            build_args = [
-                sys.executable,
-                str(build_script),
-                str(dot_path),
-                str(project_root / "data" / "bundle.json")
-            ]
-
-            result = subprocess.run(
-                build_args,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
+            set_build_status(
+                state="queued",
+                message="DOT file uploaded. Bundle generation is starting...",
+                startedAt=time.time(),
+                finishedAt=None,
             )
-
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout
-                print(f"  ERROR: {error_msg}")
-                self.send_json_response({
-                    'success': False,
-                    'error': f'Bundle generation failed: {error_msg}'
-                }, 500)
-                return
-
-            print(f"  Bundle generated successfully!")
-            print(result.stdout)
+            thread = threading.Thread(
+                target=run_bundle_build,
+                args=(project_root, dot_path),
+                daemon=True,
+            )
+            thread.start()
 
             self.send_json_response({
                 'success': True,
-                'message': 'Files uploaded and bundle regenerated successfully'
-            })
+                'message': 'DOT file uploaded. Bundle generation is running.',
+                'build': get_build_status(),
+            }, 202)
 
-        except subprocess.TimeoutExpired:
-            self.send_json_response({
-                'success': False,
-                'error': 'Bundle generation timed out (>5 minutes)'
-            }, 500)
         except Exception as e:
             print(f"  ERROR: {str(e)}")
             self.send_json_response({
