@@ -23,6 +23,54 @@ const GraphManager = {
         sim: '#e4b892',
         event: '#c79f00'
     },
+    defaultNodeSize: 58,
+    vertexNodeSize: 30,
+    eventNodeSize: 88,
+    smallParticlePdgIds: new Set([22, 11, -11]),
+
+    htmlLabelToCanvasText(value) {
+        const superscriptChars = {
+            '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+            '+': '⁺', '-': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+            'n': 'ⁿ', 'i': 'ⁱ'
+        };
+        const subscriptChars = {
+            '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+            '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+            '+': '₊', '-': '₋', '−': '₋', '=': '₌', '(': '₍', ')': '₎'
+        };
+
+        const convertText = (text, replacements) => Array.from(text)
+            .map(character => replacements[character] || character)
+            .join('');
+
+        const template = document.createElement('template');
+        template.innerHTML = String(value);
+
+        const nodeToText = (node, replacements = null) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return replacements ? convertText(node.textContent, replacements) : node.textContent;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+                return '';
+            }
+
+            const tagName = node.nodeType === Node.ELEMENT_NODE ? node.tagName.toUpperCase() : '';
+            const childReplacements = tagName === 'SUP'
+                ? superscriptChars
+                : tagName === 'SUB'
+                    ? subscriptChars
+                    : replacements;
+
+            return Array.from(node.childNodes)
+                .map(child => nodeToText(child, childReplacements))
+                .join('');
+        };
+
+        return nodeToText(template.content);
+    },
 
     getNodeKind(ele) {
         const explicitType = String(ele.data('type') || '').trim();
@@ -96,12 +144,18 @@ const GraphManager = {
         return shape === 'diamond' || /^v\d+$/.test(ele.id());
     },
 
+    getParticlePdgId(ele) {
+        const rawParticleId = ele.data('pdgId') ?? ele.data('pdgid') ?? ele.data('pid') ?? ele.data('pdg');
+        const particleId = Number.parseInt(rawParticleId, 10);
+        return Number.isFinite(particleId) ? particleId : null;
+    },
+
     isParticleNode(ele) {
         const type = this.getNodeKind(ele);
         if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle') return true;
 
-        const particleId = ele.data('pdgId') ?? ele.data('pdgid') ?? ele.data('pid') ?? ele.data('pdg');
-        if (particleId !== undefined && particleId !== null && String(particleId) !== '0') return true;
+        const particleId = this.getParticlePdgId(ele);
+        if (particleId !== null && particleId !== 0) return true;
 
         const shape = String(ele.data('shape') || '').trim();
         return shape === 'ellipse' || /^p\d+$/.test(ele.id());
@@ -113,15 +167,16 @@ const GraphManager = {
             data: key => data[key]
         };
 
+        let label;
         if (this.isLogicalVertex(dataAccessor)) {
-            return this.getVertexKeyFromData(data) || data.id;
+            label = this.getVertexKeyFromData(data) || data.id;
+        } else if (this.isParticleNode(dataAccessor)) {
+            label = this.getParticleNameFromData(data) || data.id;
+        } else {
+            label = data.displayLabel || data.label || data.id;
         }
 
-        if (this.isParticleNode(dataAccessor)) {
-            return this.getParticleNameFromData(data) || data.id;
-        }
-
-        return data.displayLabel || data.label || data.id;
+        return this.htmlLabelToCanvasText(label);
     },
 
     getParticleNameFromData(data) {
@@ -215,14 +270,15 @@ const GraphManager = {
 
     getNodeSize(ele) {
         const type = this.getNodeKind(ele);
-        if (type === 'GenEvent') return 88;
-        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 30;
-        if (this.isLogicalVertex(ele)) return 30;
+        if (type === 'GenEvent') return this.eventNodeSize;
+        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return this.vertexNodeSize;
+        if (this.isLogicalVertex(ele)) return this.vertexNodeSize;
         if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle' || this.isParticleNode(ele)) {
-            const labelLength = String(ele.data('label') || '').length;
-            return Math.min(58, Math.max(32, labelLength * 7 + 12));
+            const particleId = this.getParticlePdgId(ele);
+            const scale = this.smallParticlePdgIds.has(particleId) ? 0.5 : 1;
+            return this.defaultNodeSize * scale;
         }
-        return 'label';
+        return this.defaultNodeSize;
     },
 
     getNodeBorderColor(ele) {
@@ -541,10 +597,10 @@ const GraphManager = {
                 animate: false,
                 rankDir: 'TB',
                 ranker: 'network-simplex',
-                nodeSep: 40,
-                edgeSep: 16,
-                rankSep: 90,
-                spacingFactor: 1.1,
+                nodeSep: 20,
+                edgeSep: 5,
+                rankSep: 80,
+                spacingFactor: 0.9,
                 fit: false,
                 padding: 30,
                 edgeWeight: edge => this.getDagreEdgeWeight(edge)

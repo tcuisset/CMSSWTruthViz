@@ -68,7 +68,7 @@ def particle_name_from_id(particle_id):
         return None
 
     try:
-        name = Particle.from_pdgid(pdgid).name
+        name = Particle.from_pdgid(pdgid).html_name
     except Exception:
         return None
 

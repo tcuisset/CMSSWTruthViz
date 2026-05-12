@@ -121,7 +121,7 @@ const PanelManager = {
         const title = (nodeData.detailLabel || nodeData.label || nodeData.id).split('\n')[0];
         document.getElementById('node-name').textContent = title;
         document.getElementById('node-id').textContent = nodeData.id;
-        document.getElementById('node-particle-name').textContent = this.getParticleNiceName(nodeData);
+        document.getElementById('node-particle-name').innerHTML = this.getParticleNiceName(nodeData);
         document.getElementById('node-pdg-id').textContent = this.formatValue(this.getPdgId(nodeData));
         document.getElementById('node-energy').textContent = this.formatEnergy(this.getEnergy(nodeData));
 
@@ -238,7 +238,11 @@ const PanelManager = {
             labelSpan.textContent = label;
 
             const valueSpan = document.createElement('span');
-            valueSpan.textContent = value;
+            if (label === 'Particle') {
+                valueSpan.innerHTML = value;
+            } else {
+                valueSpan.textContent = value;
+            }
 
             field.appendChild(labelSpan);
             field.appendChild(valueSpan);
@@ -354,7 +358,7 @@ const PanelManager = {
         if (htmlLabel) {
             const renderedLabel = document.createElement('div');
             renderedLabel.className = 'dot-html-label';
-            renderedLabel.appendChild(this.sanitizeDotHtml(htmlLabel));
+            renderedLabel.innerHTML = htmlLabel;
             container.appendChild(renderedLabel);
             return;
         }
@@ -381,62 +385,6 @@ const PanelManager = {
         }
 
         return null;
-    },
-
-    /**
-     * Preserve the small HTML subset used by Graphviz labels.
-     */
-    sanitizeDotHtml(html) {
-        const template = document.createElement('template');
-        template.innerHTML = html;
-
-        const allowedTags = new Set(['TABLE', 'TBODY', 'TR', 'TD', 'B', 'I', 'U', 'S', 'SUB', 'SUP', 'FONT', 'BR']);
-        const allowedAttributes = {
-            TABLE: new Set(['border', 'cellpadding', 'cellspacing', 'align', 'bgcolor']),
-            TD: new Set(['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'colspan', 'rowspan']),
-            FONT: new Set(['color', 'face', 'size'])
-        };
-
-        const sanitizeNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                return document.createTextNode(node.textContent);
-            }
-
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-                return document.createDocumentFragment();
-            }
-
-            const tagName = node.tagName.toUpperCase();
-            const fragment = document.createDocumentFragment();
-
-            if (!allowedTags.has(tagName)) {
-                Array.from(node.childNodes).forEach(child => {
-                    fragment.appendChild(sanitizeNode(child));
-                });
-                return fragment;
-            }
-
-            const element = document.createElement(tagName.toLowerCase());
-            const tagAttributes = allowedAttributes[tagName] || new Set();
-            Array.from(node.attributes).forEach(attribute => {
-                const name = attribute.name.toLowerCase();
-                if (tagAttributes.has(name)) {
-                    element.setAttribute(name, attribute.value);
-                }
-            });
-
-            Array.from(node.childNodes).forEach(child => {
-                element.appendChild(sanitizeNode(child));
-            });
-
-            return element;
-        };
-
-        const fragment = document.createDocumentFragment();
-        Array.from(template.content.childNodes).forEach(child => {
-            fragment.appendChild(sanitizeNode(child));
-        });
-        return fragment;
     },
 
     /**
