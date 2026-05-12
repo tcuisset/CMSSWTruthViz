@@ -95,8 +95,8 @@ The app starts Cytoscape with a `preset` layout and then explicitly runs `GraphM
 
 Available layout engines:
 
-- Dagre: default hierarchical layout. It uses top-to-bottom ranks, `network-simplex`, `nodeSep: 40`, `edgeSep: 16`, `rankSep: 90`, and `spacingFactor: 1.1`.
-- fCoSE: optional force-directed layout. It uses `quality: "proof"` and `numIter: 8000`.
+- Dagre: hierarchical layout. It uses top-to-bottom ranks, `network-simplex`, `nodeSep: 40`, `edgeSep: 16`, `rankSep: 90`, and `spacingFactor: 1.1`.
+- fCoSE: default force-directed layout. It uses `quality: "proof"` and `numIter: 8000`.
 - ELK: optional layered layout. It uses `algorithm: "layered"`, rightward direction, 40px layer spacing, 20px node spacing, and orthogonal edge routing.
 - Breadthfirst fallback: used only if Dagre extension registration is unavailable.
 

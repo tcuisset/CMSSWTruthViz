@@ -16,7 +16,7 @@ const GraphManager = {
     graphName: '',
     hideGenEventNodes: true,
     hideSimVertexKey0Node: true,
-    hideSmallDisconnectedSubgraphs: false,
+    hideSmallDisconnectedSubgraphs: true,
     smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
         gen: '#c1daf3',
@@ -566,16 +566,66 @@ const GraphManager = {
         if (this.selectedLayoutEngine === 'fcose' && this.fcoseRegistered) {
             return {
                 name: 'fcose',
-                animate: false,
+                // animate: false,
+                // quality: 'proof',
+                // // randomize: false,
+                // fit: false,
+                // // padding: 30,
+                // // nodeRepulsion: 4500,
+                // // idealEdgeLength: 55,
+                // // edgeElasticity: 0.45,
+                // // gravity: 0.25,
+                // numIter: 8000
+
+                // "fast" config
                 quality: 'proof',
-                // randomize: false,
+                randomize: true,
+
+                animate: false,
                 fit: false,
-                // padding: 30,
-                // nodeRepulsion: 4500,
-                // idealEdgeLength: 55,
-                // edgeElasticity: 0.45,
-                // gravity: 0.25,
-                numIter: 8000
+                padding: 40,
+
+                uniformNodeDimensions: true,
+                nodeDimensionsIncludeLabels: false,
+
+                packComponents: true,
+
+                samplingType: true,
+                sampleSize: 50,
+                nodeSeparation: 500, // from 80
+
+                // Sort-of readable but lots of edge crossings
+                // nodeRepulsion: () => 8000,
+                // idealEdgeLength: () => 200,
+                // edgeElasticity: () => 0.3, // from 0.35
+                // gravity: 0.15,
+                // gravityRange: 3.8,
+
+                // also good
+                nodeRepulsion: () => 12000,
+                idealEdgeLength: () => 120,
+                edgeElasticity: () => 0.2,
+                gravity: 0.05,
+                gravityRange: 4.5,
+
+                // The below are not that good, probably needs to have an adjustment bewteen vertex/particle 
+
+                // nodeRepulsion: () => 12000,
+                // idealEdgeLength: edge => edge.target().outgoers('node').length == 1 ? 90 : ((edge.target().outgoers('node').length == 2) ? 100 : 140),
+                // edgeElasticity: () => 0.2,
+                // gravity: 0.05,
+                // gravityRange: 4.5,
+
+                // nodeRepulsion: () => 12000000,
+                // idealEdgeLength: edge => edge.target().outgoers('node').length == 1 ? 1 : ((edge.target().outgoers('node').length == 2) ? 2 : 5), //  edge => Math.min(20+ 30*(-1+edge.target().outgoers('node').length), 80)
+                // edgeElasticity: edge => 1.* (edge.target().outgoers('node').length == 1 ? 0.5 :  ((edge.target().outgoers('node').length == 2) ? 0.6: 0.8)),
+                // gravity: 0.1,
+                // gravityRange: 3,
+
+                numIter: 30000,
+                tile: true,
+                tilingPaddingVertical: 12,
+                tilingPaddingHorizontal: 12
             };
         }
 
