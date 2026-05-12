@@ -129,12 +129,22 @@
                 <div id="panel-content">
                     <div id="node-info">
                         <h2 id="node-name">Node</h2>
-                        <div class="info-section">
-                            <strong>Shape:</strong> <span id="node-shape">-</span>
+                        <div id="node-summary" class="node-summary-line">
+                            <span><strong>ID</strong> <span id="node-id">-</span></span>
+                            <span><strong>Name</strong> <span id="node-particle-name">-</span></span>
+                            <span><strong>PDG ID</strong> <span id="node-pdg-id">-</span></span>
+                            <span><strong>Energy</strong> <span id="node-energy">-</span></span>
                         </div>
-                        <div class="info-section">
-                            <strong>ID:</strong> <span id="node-id">-</span>
-                        </div>
+                    </div>
+
+                    <div id="connected-towards-section" class="section">
+                        <h3>Ancestors</h3>
+                        <div id="connected-towards-list" class="connected-node-list"></div>
+                    </div>
+
+                    <div id="connected-away-section" class="section">
+                        <h3>Descendants</h3>
+                        <div id="connected-away-list" class="connected-node-list"></div>
                     </div>
 
                     <div id="parameters-section" class="section">

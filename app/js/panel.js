@@ -92,7 +92,7 @@ const PanelManager = {
      * Open panel with node details
      */
     open(nodeName, nodeId) {
-        this.currentNode = nodeName;
+        this.currentNode = nodeId || nodeName;
 
         // Add to history if different from current
         if (this.history.length === 0 || this.history[this.history.length - 1] !== nodeName) {
@@ -120,8 +120,10 @@ const PanelManager = {
     displayNode(nodeData) {
         const title = (nodeData.detailLabel || nodeData.label || nodeData.id).split('\n')[0];
         document.getElementById('node-name').textContent = title;
-        document.getElementById('node-shape').textContent = nodeData.shape || 'DOT node';
         document.getElementById('node-id').textContent = nodeData.id;
+        document.getElementById('node-particle-name').textContent = this.getParticleNiceName(nodeData);
+        document.getElementById('node-pdg-id').textContent = this.formatValue(this.getPdgId(nodeData));
+        document.getElementById('node-energy').textContent = this.formatEnergy(this.getEnergy(nodeData));
 
         const ignoredKeys = new Set(['id', 'label', 'displayLabel', 'detailLabel', 'rawLabel']);
         const parameters = {};
@@ -136,8 +138,209 @@ const PanelManager = {
         });
 
         this.displayParameters(parameters);
+        this.displayConnectedNodes(nodeData.id);
 
         this.displayRawDotLabel(nodeData);
+    },
+
+    /**
+     * Render incoming and outgoing direct neighbors for the selected node.
+     */
+    displayConnectedNodes(nodeId) {
+        const node = GraphManager.cy?.getElementById(nodeId);
+        if (!node || node.length === 0) {
+            this.displayConnectedNodeList('connected-towards-list', []);
+            this.displayConnectedNodeList('connected-away-list', []);
+            return;
+        }
+
+        const towards = node.incomers('edge').map(edge => edge.source());
+        const away = node.outgoers('edge').map(edge => edge.target());
+
+        this.displayConnectedNodeList('connected-towards-list', this.uniqueNodes(towards), 'towards');
+        this.displayConnectedNodeList('connected-away-list', this.uniqueNodes(away), 'away');
+    },
+
+    /**
+     * Keep one row per node if parallel edges exist.
+     */
+    uniqueNodes(nodes) {
+        const seen = new Set();
+        return nodes.filter(node => {
+            if (!node || node.length === 0 || seen.has(node.id())) {
+                return false;
+            }
+
+            seen.add(node.id());
+            return true;
+        });
+    },
+
+    /**
+     * Display one clickable direct-neighbor list.
+     */
+    displayConnectedNodeList(containerId, nodes, direction) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+
+        if (nodes.length === 0) {
+            container.innerHTML = '<div class="empty-state">No connected nodes</div>';
+            return;
+        }
+
+        nodes.forEach(node => {
+            const entry = document.createElement('div');
+            entry.className = 'connected-node-entry';
+            entry.appendChild(this.createConnectedNodeButton(node));
+
+            const nextLevelNodes = this.getVertexNextLevelNodes(node, direction);
+            if (nextLevelNodes.length > 0) {
+                const sublist = document.createElement('div');
+                sublist.className = 'connected-node-sublist';
+
+                nextLevelNodes.forEach(nextNode => {
+                    sublist.appendChild(this.createConnectedNodeButton(nextNode, true));
+                });
+
+                entry.appendChild(sublist);
+            }
+
+            container.appendChild(entry);
+        });
+    },
+
+    /**
+     * Build one clickable connected-node row.
+     */
+    createConnectedNodeButton(node, isNested = false) {
+        const data = node.data();
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `connected-node-item${isNested ? ' nested' : ''}`;
+        button.title = `Select ${data.id}`;
+        button.addEventListener('click', () => {
+            GraphManager.focusNode(node);
+            this.open(data.label || data.id, data.id);
+        });
+
+        const fields = [
+            ['ID', data.id],
+            ['Kind', this.getNodeKindLabel(data)],
+            ['Particle', this.getConnectedParticleName(data)],
+            ['Energy', this.formatEnergy(this.getEnergy(data))]
+        ];
+
+        fields.forEach(([label, value]) => {
+            const field = document.createElement('span');
+            field.className = 'connected-node-field';
+
+            const labelSpan = document.createElement('strong');
+            labelSpan.textContent = label;
+
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = value;
+
+            field.appendChild(labelSpan);
+            field.appendChild(valueSpan);
+            button.appendChild(field);
+        });
+
+        return button;
+    },
+
+    /**
+     * If a direct connected node is a vertex, show one more level in the same direction.
+     */
+    getVertexNextLevelNodes(node, direction) {
+        if (!GraphManager.isLogicalVertex(node) && !this.getNodeKindLabel(node.data()).includes('vertex')) {
+            return [];
+        }
+
+        const nextNodes = direction === 'towards'
+            ? node.incomers('edge').map(edge => edge.source())
+            : node.outgoers('edge').map(edge => edge.target());
+
+        return this.uniqueNodes(nextNodes);
+    },
+
+    /**
+     * Short display kind for panel neighbor rows.
+     */
+    getNodeKindLabel(data) {
+        const ele = this.makeDataAccessor(data);
+        const kind = GraphManager.getNodeKind(ele);
+        const normalized = String(kind || '').toLowerCase();
+
+        if (normalized.includes('event')) return 'gen';
+        if (normalized.includes('particle') || normalized === 'simtrack') return 'particle';
+        if (normalized.includes('vertex')) {
+            if (normalized.includes('sim')) return 'sim-vertex';
+            if (normalized.includes('gen')) return 'gen-vertex';
+            return 'vertex';
+        }
+
+        return kind || 'node';
+    },
+
+    /**
+     * Particle nice name from explicit attributes or the rendered DOT text.
+     */
+    getParticleNiceName(data) {
+        const name = GraphManager.getParticleNameFromData(data);
+        if (name && name !== '0') return name;
+
+        const kind = this.getNodeKindLabel(data);
+        return kind || 'N/A';
+    },
+
+    getConnectedParticleName(data) {
+        const isParticle = GraphManager.isParticleNode(this.makeDataAccessor(data));
+        if (!isParticle) {
+            return 'N/A';
+        }
+
+        return this.getParticleNiceName(data);
+    },
+
+    getPdgId(data) {
+        const particleId = data.pdgId ?? data.pdgid ?? data.pid;
+        if (particleId !== undefined && particleId !== null) {
+            return particleId;
+        }
+
+        if (data.pdg === undefined || data.pdg === null) {
+            return null;
+        }
+
+        const isParticle = GraphManager.isParticleNode(this.makeDataAccessor(data));
+        if (!isParticle && String(data.pdg) === '0') {
+            return null;
+        }
+
+        return data.pdg;
+    },
+
+    getEnergy(data) {
+        return GraphManager.getNodeEnergy(this.makeDataAccessor(data));
+    },
+
+    makeDataAccessor(data) {
+        return {
+            id: () => data.id,
+            data: key => data[key]
+        };
+    },
+
+    formatValue(value) {
+        if (value === undefined || value === null || value === '') {
+            return 'N/A';
+        }
+
+        return String(value);
+    },
+
+    formatEnergy(value) {
+        return Number.isFinite(value) ? value.toFixed(3) : 'N/A';
     },
 
     /**
@@ -280,8 +483,12 @@ const PanelManager = {
      */
     displayError(nodeName) {
         document.getElementById('node-name').textContent = nodeName;
-        document.getElementById('node-shape').textContent = 'N/A';
         document.getElementById('node-id').textContent = 'N/A';
+        document.getElementById('node-particle-name').textContent = 'N/A';
+        document.getElementById('node-pdg-id').textContent = 'N/A';
+        document.getElementById('node-energy').textContent = 'N/A';
+        document.getElementById('connected-towards-list').innerHTML = '<div class="empty-state">No connected nodes</div>';
+        document.getElementById('connected-away-list').innerHTML = '<div class="empty-state">No connected nodes</div>';
         document.getElementById('parameters-list').innerHTML = '<div class="empty-state">No attributes</div>';
         document.getElementById('raw-snippet').innerHTML = '<div class="empty-state">No DOT label available</div>';
 

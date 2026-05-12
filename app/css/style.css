@@ -415,13 +415,30 @@ body {
     word-break: break-word;
 }
 
-.info-section {
-    margin-bottom: 10px;
+.node-summary-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 14px;
 }
 
-.info-section strong {
+.node-summary-line > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 5px 8px;
+    background: #f8f9fa;
+    border: 1px solid #e1e5e8;
+    border-radius: 4px;
+}
+
+.node-summary-line strong {
     color: #555;
+}
+
+.node-summary-line span span {
+    overflow-wrap: anywhere;
 }
 
 /* Sections */
@@ -445,6 +462,75 @@ body {
     padding: 2px 6px;
     border-radius: 3px;
     margin-left: 6px;
+}
+
+/* Connected Nodes */
+.connected-node-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.connected-node-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.connected-node-item {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(70px, 1fr) minmax(92px, 1fr) minmax(70px, 0.8fr) minmax(78px, 0.8fr);
+    gap: 8px;
+    align-items: center;
+    padding: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dfe6e9;
+    border-radius: 4px;
+    color: #2c3e50;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.connected-node-item.nested {
+    background: #ffffff;
+    border-color: #e8edf0;
+}
+
+.connected-node-item:hover,
+.connected-node-item:focus {
+    background: #eef6fc;
+    border-color: #3498db;
+    outline: none;
+}
+
+.connected-node-field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.connected-node-field strong {
+    color: #7f8c8d;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.connected-node-field span {
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+}
+
+.connected-node-sublist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 16px;
+    padding-left: 10px;
+    border-left: 2px solid #dfe6e9;
 }
 
 /* Attributes */

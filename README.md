@@ -125,10 +125,10 @@ The script automatically handles the complete setup:
    - Creates `data/bundle.json` (~22 MB)
 
 5. ✅ **Starts web server**
-   - Runs on `http://localhost:8000`
+   - Runs on the first available port starting at `http://localhost:8009`
    - Serves the application at `/app/`
 
-Then open your browser to: **http://localhost:8000/app/**
+Then open the **Application URL** printed by the server, usually: **http://localhost:8009/app/**
 
 ### Requirements for run.sh
 
@@ -199,6 +199,8 @@ CMSSWGraph/
 ├── run.sh                 # Quick start script
 └── README.md             # This file
 ```
+
+For implementation details, see [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md). It documents the Cytoscape.js integration, layout pipeline, bundle generation, data model, server/upload flow, and main JavaScript managers.
 
 ## Usage Guide
 
@@ -360,14 +362,10 @@ The graph layout can be switched at runtime:
 python preprocess/build_bundle.py
 ```
 
-### Port 8000 already in use
+### Default port already in use
 
 **Solution:**
-```bash
-# Use a different port
-python server.py 8080
-# Then open: http://localhost:8080/app/
-```
+`server.py` automatically tries the next available port starting at `8009`. Use the **Application URL** printed in the terminal.
 
 ### Graph performance issues
 
