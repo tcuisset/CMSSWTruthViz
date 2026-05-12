@@ -73,6 +73,8 @@
             <div class="controls-section" id="stats">
                 <span id="node-count">Nodes: -</span>
                 <span id="edge-count">Edges: -</span>
+                <button id="export-png-btn" type="button" title="Save current graph view as PNG">Save PNG</button>
+                <button id="export-pdf-btn" type="button" title="Save current graph view as PDF">Save PDF</button>
                 <button id="upload-btn" style="margin-left: 20px;">Upload Files</button>
             </div>
         </div>
@@ -213,6 +215,7 @@
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
     <script src="js/bundle.js"></script>
@@ -225,6 +228,7 @@
     <script src="js/ego.js"></script>
     <script src="js/dependency.js"></script>
     <script src="js/keyboard.js"></script>
+    <script src="js/export.js"></script>
     <script src="js/upload.js"></script>
     <script src="js/main.js"></script>
 </body>

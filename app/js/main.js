@@ -60,6 +60,7 @@ async function initApp() {
         EgoGraphManager.init();
         DependencyExplorer.init();
         KeyboardNav.init();
+        ExportManager.init();
 
         // Initialize upload only in server mode
         if (!staticMode) {
