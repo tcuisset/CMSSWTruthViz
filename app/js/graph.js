@@ -7,6 +7,8 @@ const GraphManager = {
     cy: null,
     fullGraph: null,
     activeLayout: null,
+    activeLayoutWorker: null,
+    pendingLayoutStart: null,
     layoutRunId: 0,
     canceledLayoutRunId: null,
     selectedLayoutEngine: 'dagre',
@@ -1110,8 +1112,135 @@ const GraphManager = {
             return this.isEdgeVisibleForLayout(edge);
         });
 
+        if (this.shouldUseWorkerDagreLayout()) {
+            this.runWorkerDagreLayout(visibleNodes, visibleEdges);
+            return;
+        }
+
         const layout = visibleNodes.union(visibleEdges).layout(this.getLayoutConfig());
         this.runLayout(layout);
+    },
+
+    shouldUseWorkerDagreLayout() {
+        return this.selectedLayoutEngine === 'dagre'
+            && this.dagreRegistered
+            && typeof window !== 'undefined'
+            && typeof window.Worker === 'function';
+    },
+
+    runWorkerDagreLayout(visibleNodes, visibleEdges) {
+        this.cancelActiveLayout({ silent: true });
+
+        const runId = this.layoutRunId + 1;
+        this.layoutRunId = runId;
+        this.canceledLayoutRunId = null;
+        this.showLayoutStatus();
+
+        const workerLayout = {
+            stop: () => {
+                if (this.activeLayoutWorker) {
+                    this.activeLayoutWorker.terminate();
+                    this.activeLayoutWorker = null;
+                }
+            }
+        };
+
+        this.activeLayout = workerLayout;
+        const payload = this.buildDagreWorkerPayload(visibleNodes, visibleEdges);
+
+        this.pendingLayoutStart = this.scheduleLayoutStart(() => {
+            if (this.layoutRunId !== runId || this.activeLayout !== workerLayout) {
+                return;
+            }
+
+            this.pendingLayoutStart = null;
+            this.startDagreWorker(runId, workerLayout, payload, visibleNodes, visibleEdges);
+        });
+    },
+
+    buildDagreWorkerPayload(visibleNodes, visibleEdges) {
+        return {
+            options: {
+                rankdir: 'TB',
+                ranker: 'network-simplex',
+                nodesep: 20,
+                edgesep: 5,
+                ranksep: 80,
+                marginx: 30,
+                marginy: 30,
+                spacingFactor: 0.9
+            },
+            nodes: visibleNodes.map(node => ({
+                id: node.id(),
+                width: Math.max(1, node.outerWidth()),
+                height: Math.max(1, node.outerHeight())
+            })),
+            edges: visibleEdges.map(edge => ({
+                id: edge.id(),
+                source: edge.source().id(),
+                target: edge.target().id(),
+                weight: this.getDagreEdgeWeight(edge)
+            }))
+        };
+    },
+
+    startDagreWorker(runId, workerLayout, payload, visibleNodes, visibleEdges) {
+        let worker;
+
+        try {
+            worker = new Worker(new URL('js/layout-worker.js', window.location.href));
+        } catch (error) {
+            console.warn('Could not start layout worker; falling back to main-thread Dagre layout.', error);
+            this.activeLayout = null;
+            this.runLayout(visibleNodes.union(visibleEdges).layout(this.getLayoutConfig()));
+            return;
+        }
+
+        this.activeLayoutWorker = worker;
+
+        worker.onmessage = event => {
+            if (this.layoutRunId !== runId || this.activeLayout !== workerLayout) {
+                worker.terminate();
+                return;
+            }
+
+            this.activeLayoutWorker = null;
+            this.activeLayout = null;
+            worker.terminate();
+
+            const positions = event.data?.positions || [];
+            this.applyWorkerLayoutPositions(positions);
+            if (this.canceledLayoutRunId !== runId) {
+                this.fitVisible();
+            }
+            this.hideLayoutStatus();
+        };
+
+        worker.onerror = error => {
+            if (this.layoutRunId !== runId || this.activeLayout !== workerLayout) {
+                worker.terminate();
+                return;
+            }
+
+            console.warn('Layout worker failed; falling back to main-thread Dagre layout.', error);
+            this.activeLayoutWorker = null;
+            this.activeLayout = null;
+            worker.terminate();
+            this.runLayout(visibleNodes.union(visibleEdges).layout(this.getLayoutConfig()));
+        };
+
+        worker.postMessage(payload);
+    },
+
+    applyWorkerLayoutPositions(positions) {
+        this.cy.batch(() => {
+            positions.forEach(position => {
+                const node = this.cy.getElementById(position.id);
+                if (node.nonempty()) {
+                    node.position({ x: position.x, y: position.y });
+                }
+            });
+        });
     },
 
     /**
@@ -1138,13 +1267,22 @@ const GraphManager = {
             this.hideLayoutStatus();
         });
 
-        layout.run();
+        this.pendingLayoutStart = this.scheduleLayoutStart(() => {
+            if (this.layoutRunId !== runId || this.activeLayout !== layout) {
+                return;
+            }
+
+            this.pendingLayoutStart = null;
+            layout.run();
+        });
     },
 
     /**
      * Stop the currently running layout, if the engine supports interruption.
      */
     cancelActiveLayout(options = {}) {
+        this.cancelPendingLayoutStart();
+
         if (!this.activeLayout) {
             return;
         }
@@ -1157,9 +1295,63 @@ const GraphManager = {
             layout.stop();
         }
 
+        if (this.activeLayoutWorker) {
+            this.activeLayoutWorker.terminate();
+            this.activeLayoutWorker = null;
+        }
+
         if (!options.silent) {
             this.hideLayoutStatus();
         }
+    },
+
+    scheduleLayoutStart(callback) {
+        if (typeof window === 'undefined') {
+            callback();
+            return null;
+        }
+
+        const start = {
+            frameId: null,
+            timeoutId: null
+        };
+
+        const queueLayoutStart = () => {
+            start.frameId = null;
+            start.timeoutId = window.setTimeout(() => {
+                start.timeoutId = null;
+                callback();
+            }, 0);
+        };
+
+        if (window.requestAnimationFrame) {
+            start.frameId = window.requestAnimationFrame(queueLayoutStart);
+        } else {
+            start.frameId = window.setTimeout(queueLayoutStart, 0);
+        }
+
+        return start;
+    },
+
+    cancelPendingLayoutStart() {
+        if (!this.pendingLayoutStart || typeof window === 'undefined') {
+            this.pendingLayoutStart = null;
+            return;
+        }
+
+        if (this.pendingLayoutStart.frameId !== null) {
+            if (window.cancelAnimationFrame) {
+                window.cancelAnimationFrame(this.pendingLayoutStart.frameId);
+            } else {
+                window.clearTimeout(this.pendingLayoutStart.frameId);
+            }
+        }
+
+        if (this.pendingLayoutStart.timeoutId !== null) {
+            window.clearTimeout(this.pendingLayoutStart.timeoutId);
+        }
+
+        this.pendingLayoutStart = null;
     },
 
     showLayoutStatus() {
