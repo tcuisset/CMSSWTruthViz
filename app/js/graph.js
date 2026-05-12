@@ -21,6 +21,7 @@ const GraphManager = {
     nodeTypeColors: {
         gen: '#c1daf3',
         sim: '#e4b892',
+        genSim: '#2ecc71',
         event: '#c79f00'
     },
     defaultNodeSize: 58,
@@ -238,12 +239,13 @@ const GraphManager = {
 
     hasCrossedBoundary(ele) {
         const value = ele.data('crossedBoundary');
-        return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+        const value2 = ele.data("nCheckpoints");
+        return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true' || value2 == "1";
     },
 
     getNodeFillColor(ele) {
         const type = this.getNodeKind(ele);
-        if (type.startsWith('GenSim')) return this.nodeTypeColors.gen;
+        if (type.startsWith('GenSim')) return this.nodeTypeColors.genSim;
         if (type === 'GenEvent') return this.nodeTypeColors.event;
         if (type.startsWith('Gen')) return this.nodeTypeColors.gen;
         if (type.startsWith('Sim')) return this.nodeTypeColors.sim;
@@ -291,7 +293,6 @@ const GraphManager = {
 
     getNodeBorderColor(ele) {
         if (this.hasCrossedBoundary(ele)) return '#e804ec';
-        if (this.isLogicalGenSimNode(ele)) return this.nodeTypeColors.sim;
         if (this.isLogicalGraph()) return '#34495e';
 
         const color = ele.data('color');
@@ -299,7 +300,6 @@ const GraphManager = {
     },
 
     getNodeBorderWidth(ele) {
-        if (this.isLogicalGenSimNode(ele)) return 3;
         return this.hasCrossedBoundary(ele) ? 3 : 1;
     },
 
@@ -377,7 +377,7 @@ const GraphManager = {
                             return GraphManager.getNodeSize(ele);
                         },
                         'border-style': function(ele) {
-                            return GraphManager.hasCrossedBoundary(ele) || GraphManager.isLogicalGenSimNode(ele) ? 'double' : 'solid';
+                            return GraphManager.hasCrossedBoundary(ele) ? 'double' : 'solid';
                         }
                     }
                 },
