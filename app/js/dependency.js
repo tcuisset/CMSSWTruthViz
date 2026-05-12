@@ -138,9 +138,9 @@ const DependencyExplorer = {
             currentLevel.forEach(node => {
                 let neighbors;
 
-                if (direction === 'upstream') {
+                if (direction === 'downstream') {
                     neighbors = node.outgoers('node');
-                } else if (direction === 'downstream') {
+                } else if (direction === 'upstream') {
                     neighbors = node.incomers('node');
                 } else {
                     neighbors = node.neighborhood('node');
@@ -157,11 +157,11 @@ const DependencyExplorer = {
                 // Add edges based on direction
                 let connectedEdges;
 
-                if (direction === 'upstream') {
+                if (direction === 'downstream') {
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return edge.source().id() === node.id() && visited.has(edge.target().id());
                     });
-                } else if (direction === 'downstream') {
+                } else if (direction === 'upstream') {
                     connectedEdges = node.connectedEdges().filter(edge => {
                         return edge.target().id() === node.id() && visited.has(edge.source().id());
                     });
