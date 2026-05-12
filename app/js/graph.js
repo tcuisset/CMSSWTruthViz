@@ -688,6 +688,7 @@ const GraphManager = {
             const label = node.data('label');
 
             console.log('Node clicked:', label);
+            this.applySelection(node);
             PanelManager.open(label, nodeId);
         });
 
@@ -762,14 +763,13 @@ const GraphManager = {
         const layoutEngineSelect = document.getElementById('layout-engine-select');
         if (layoutEngineSelect) {
             layoutEngineSelect.value = this.selectedLayoutEngine;
-            layoutEngineSelect.addEventListener('change', () => {
-                this.setLayoutEngine(layoutEngineSelect.value);
-            });
         }
 
-        const layoutRedoBtn = document.getElementById('layout-redo-btn');
-        if (layoutRedoBtn) {
-            layoutRedoBtn.addEventListener('click', () => this.relayoutVisible());
+        const layoutApplyBtn = document.getElementById('layout-apply-btn');
+        if (layoutApplyBtn) {
+            layoutApplyBtn.addEventListener('click', () => {
+                this.setLayoutEngine(layoutEngineSelect ? layoutEngineSelect.value : this.selectedLayoutEngine);
+            });
         }
 
         const layoutCancelBtn = document.getElementById('layout-cancel-btn');
@@ -1030,6 +1030,33 @@ const GraphManager = {
         this.cy.nodes().removeClass('selected');
         this.cy.edges().removeClass('selected');
         KeyboardNav.selectedNode = null;
+    },
+
+    /**
+     * Return selected nodes for apply-based filters, falling back to the open panel node.
+     */
+    getSelectedNodesForFiltering() {
+        let selectedNodes = this.cy.nodes('.selected');
+
+        if (selectedNodes.length > 0) {
+            return selectedNodes;
+        }
+
+        if (!PanelManager.currentNode) {
+            return this.cy.collection();
+        }
+
+        return this.getNodeByLabel(PanelManager.currentNode);
+    },
+
+    /**
+     * Clear focus/dependency visibility filtering while preserving view option filters.
+     */
+    clearSelectionFilter() {
+        this.cy.nodes().removeClass('hidden');
+        this.cy.edges().removeClass('hidden');
+        this.clearHighlight();
+        this.fitVisible();
     },
 
     /**

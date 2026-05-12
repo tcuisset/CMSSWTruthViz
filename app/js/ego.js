@@ -34,25 +34,19 @@ const EgoGraphManager = {
     apply() {
         const radius = parseInt(this.radiusInput.value);
 
-        if (!PanelManager.currentNode) {
+        const selectedNodes = GraphManager.getSelectedNodesForFiltering();
+
+        if (selectedNodes.length === 0) {
             alert('Please select a node first');
             return;
         }
 
         console.log('Applying ego graph with radius:', radius);
 
-        const nodes = GraphManager.getNodeByLabel(PanelManager.currentNode);
-
-        if (nodes.length === 0) {
-            alert('Current node not found in graph');
-            return;
-        }
-
-        const centerNode = nodes[0];
-        this.currentCenter = centerNode;
+        this.currentCenter = selectedNodes;
 
         // Find N-hop neighborhood using BFS
-        const neighborhood = this.getNeighborhood(centerNode, radius);
+        const neighborhood = this.getNeighborhood(selectedNodes, radius);
 
         // Hide nodes not in neighborhood
         GraphManager.cy.nodes().addClass('hidden');
@@ -75,12 +69,12 @@ const EgoGraphManager = {
     /**
      * Get N-hop neighborhood using BFS
      */
-    getNeighborhood(centerNode, radius) {
-        const visited = new Set([centerNode.id()]);
-        const nodes = GraphManager.cy.collection().union(centerNode);
+    getNeighborhood(centerNodes, radius) {
+        const visited = new Set(centerNodes.map(node => node.id()));
+        const nodes = GraphManager.cy.collection().union(centerNodes);
         const edges = GraphManager.cy.collection();
 
-        let currentLevel = GraphManager.cy.collection().union(centerNode);
+        let currentLevel = GraphManager.cy.collection().union(centerNodes);
 
         for (let i = 0; i < radius; i++) {
             const nextLevel = GraphManager.cy.collection();

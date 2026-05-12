@@ -5,31 +5,39 @@
 
 const DependencyExplorer = {
     depthInput: null,
+    applyBtn: null,
+    noneBtn: null,
     showBtn: null,
     upstreamBtn: null,
     downstreamBtn: null,
     selectedNodeName: null,
+    selectedDirection: 'none',
 
     /**
      * Initialize dependency explorer
      */
     init() {
         this.depthInput = document.getElementById('dep-depth');
+        this.applyBtn = document.getElementById('dep-apply-btn');
+        this.noneBtn = document.getElementById('dep-none-btn');
         this.showBtn = document.getElementById('dep-show-btn');
         this.upstreamBtn = document.getElementById('dep-upstream-btn');
         this.downstreamBtn = document.getElementById('dep-downstream-btn');
         this.selectedNodeName = document.getElementById('selected-node-name');
 
         this.setupEventListeners();
+        this.updateDirectionButtons();
     },
 
     /**
      * Setup event listeners
      */
     setupEventListeners() {
-        this.upstreamBtn.addEventListener('click', () => this.show('upstream'));
-        this.downstreamBtn.addEventListener('click', () => this.show('downstream'));
-        this.showBtn.addEventListener('click', () => this.show('both'));
+        this.noneBtn.addEventListener('click', () => this.setDirection('none'));
+        this.upstreamBtn.addEventListener('click', () => this.setDirection('upstream'));
+        this.downstreamBtn.addEventListener('click', () => this.setDirection('downstream'));
+        this.showBtn.addEventListener('click', () => this.setDirection('both'));
+        this.applyBtn.addEventListener('click', () => this.apply());
 
         // Update selected node name when panel opens
         document.addEventListener('panelOpened', (e) => {
@@ -38,35 +46,59 @@ const DependencyExplorer = {
     },
 
     /**
-     * Show dependencies
+     * Select the pending dependency direction without applying it.
      */
-    show(direction) {
-        const depth = parseInt(this.depthInput.value);
+    setDirection(direction) {
+        this.selectedDirection = direction;
+        this.updateDirectionButtons();
+    },
 
-        if (!PanelManager.currentNode) {
+    /**
+     * Keep the four-way toggle state visible.
+     */
+    updateDirectionButtons() {
+        const buttons = [
+            [this.noneBtn, 'none'],
+            [this.upstreamBtn, 'upstream'],
+            [this.downstreamBtn, 'downstream'],
+            [this.showBtn, 'both']
+        ];
+
+        buttons.forEach(([button, direction]) => {
+            if (button) {
+                button.classList.toggle('active', this.selectedDirection === direction);
+            }
+        });
+    },
+
+    /**
+     * Apply the selected dependency filter.
+     */
+    apply() {
+        const depth = parseInt(this.depthInput.value);
+        const direction = this.selectedDirection;
+
+        if (direction === 'none') {
+            GraphManager.clearSelectionFilter();
+            return;
+        }
+
+        const selectedNodes = GraphManager.getSelectedNodesForFiltering();
+
+        if (selectedNodes.length === 0) {
             alert('Please select a node first');
             return;
         }
 
         console.log(`Showing ${direction} dependencies with depth:`, depth);
-
-        const nodes = GraphManager.getNodeByLabel(PanelManager.currentNode);
-
-        if (nodes.length === 0) {
-            alert('Current node not found in graph');
-            return;
-        }
-
-        const centerNode = nodes[0];
-        this.showDependenciesForNode(centerNode, depth, direction);
+        this.showDependenciesForNodes(selectedNodes, depth, direction);
     },
 
     /**
-     * Show dependencies for a given node
+     * Show dependencies for one or more selected nodes.
      */
-    showDependenciesForNode(centerNode, depth, direction) {
-        // Get dependencies
-        const dependencies = this.getDependencies(centerNode, depth, direction);
+    showDependenciesForNodes(centerNodes, depth, direction) {
+        const dependencies = this.getDependencies(centerNodes, depth, direction);
 
         // Hide nodes not in dependencies
         GraphManager.cy.nodes().addClass('hidden');
@@ -78,7 +110,7 @@ const DependencyExplorer = {
 
         // Highlight the center node
         GraphManager.clearHighlight();
-        centerNode.addClass('highlighted');
+        centerNodes.addClass('highlighted');
 
         // Fit view to visible nodes
         GraphManager.cy.animate({
@@ -93,12 +125,12 @@ const DependencyExplorer = {
     /**
      * Get dependencies using BFS
      */
-    getDependencies(centerNode, depth, direction) {
-        const visited = new Set([centerNode.id()]);
-        const nodes = GraphManager.cy.collection().union(centerNode);
+    getDependencies(centerNodes, depth, direction) {
+        const visited = new Set(centerNodes.map(node => node.id()));
+        const nodes = GraphManager.cy.collection().union(centerNodes);
         const edges = GraphManager.cy.collection();
 
-        let currentLevel = GraphManager.cy.collection().union(centerNode);
+        let currentLevel = GraphManager.cy.collection().union(centerNodes);
 
         for (let i = 0; i < depth; i++) {
             const nextLevel = GraphManager.cy.collection();

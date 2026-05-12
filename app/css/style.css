@@ -53,6 +53,13 @@ body {
     gap: 8px;
 }
 
+.control-box {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+}
+
 .control-group label {
     font-weight: 500;
     white-space: nowrap;
@@ -105,6 +112,39 @@ body {
     background: #2980b9;
 }
 
+.control-group button.apply-btn {
+    min-width: 28px;
+    padding: 6px 8px;
+    background: #27ae60;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.control-group button.apply-btn:hover {
+    background: #1e8449;
+}
+
+.control-group button.toggle-btn,
+#dep-upstream-btn,
+#dep-downstream-btn,
+#dep-show-btn {
+    background: #566573;
+}
+
+.control-group button.toggle-btn:hover,
+#dep-upstream-btn:hover,
+#dep-downstream-btn:hover,
+#dep-show-btn:hover {
+    background: #485563;
+}
+
+.control-group button.toggle-btn.active,
+#dep-upstream-btn.active,
+#dep-downstream-btn.active,
+#dep-show-btn.active {
+    background: #3498db;
+}
+
 #search-clear-btn,
 #ego-reset-btn {
     background: #95a5a6;
@@ -153,13 +193,6 @@ body {
     white-space: nowrap;
     display: inline-block;
     vertical-align: middle;
-}
-
-#dependency-controls {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px 12px;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Main Content Area */
