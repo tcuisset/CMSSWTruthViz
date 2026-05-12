@@ -115,6 +115,25 @@ body {
     background: #7f8c8d;
 }
 
+.search-nav.hidden {
+    display: none;
+}
+
+#search-prev-btn,
+#search-next-btn {
+    min-width: 32px;
+    padding: 6px 8px;
+    font-size: 18px;
+    line-height: 1;
+}
+
+#search-result-count {
+    color: #ecf0f1;
+    font-size: 13px;
+    min-width: 48px;
+    text-align: center;
+}
+
 #stats {
     margin-left: auto;
     gap: 15px;

@@ -19,6 +19,9 @@
                     <label for="search-input">Search:</label>
                     <input type="text" id="search-input" placeholder="Search node labels..." />
                     <button id="search-btn">Find</button>
+                    <button id="search-prev-btn" class="search-nav hidden" type="button" title="Previous search result">&lsaquo;</button>
+                    <span id="search-result-count" class="search-nav hidden">0 / 0</span>
+                    <button id="search-next-btn" class="search-nav hidden" type="button" title="Next search result">&rsaquo;</button>
                     <button id="search-clear-btn">Clear</button>
                 </div>
 
@@ -152,14 +155,14 @@
                         <div id="connected-away-list" class="connected-node-list"></div>
                     </div>
 
-                    <div id="parameters-section" class="section">
-                        <h3>DOT Attributes</h3>
-                        <div id="parameters-list"></div>
-                    </div>
-
                     <div id="raw-snippet-section" class="section">
                         <h3>Rendered DOT Label</h3>
                         <div id="raw-snippet"></div>
+                    </div>
+
+                    <div id="parameters-section" class="section">
+                        <h3>DOT Attributes</h3>
+                        <div id="parameters-list"></div>
                     </div>
                 </div>
             </div>

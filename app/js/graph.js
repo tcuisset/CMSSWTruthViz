@@ -19,9 +19,9 @@ const GraphManager = {
     hideSmallDisconnectedSubgraphs: false,
     smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
-        gen: '#2e86de',
-        sim: '#e67e22',
-        event: '#f1c40f'
+        gen: '#c1daf3',
+        sim: '#e4b892',
+        event: '#c79f00'
     },
 
     getNodeKind(ele) {
@@ -521,8 +521,8 @@ const GraphManager = {
                 elk: {
                     algorithm: 'layered',
                     'elk.direction': 'DOWN',
-                    'elk.layered.spacing.nodeNodeBetweenLayers': 40,
-                    'elk.spacing.nodeNode': 20,
+                    'elk.layered.spacing.nodeNodeBetweenLayers': 5,
+                    'elk.spacing.nodeNode': 10,
                     'elk.edgeRouting': 'ORTHOGONAL'
 
                     // algorithm: 'stress', // Never ending.....
