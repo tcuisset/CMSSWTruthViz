@@ -11,7 +11,7 @@ window.bundleData = null;
  * Detect if running in static mode
  */
 function isStaticMode() {
-    return window.location.protocol === 'file:' || window.EMBEDDED_BUNDLE_DATA !== undefined;
+    return window.location.protocol === 'file:';
 }
 
 /**
