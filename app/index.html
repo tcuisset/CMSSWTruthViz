@@ -19,10 +19,18 @@
                     <label for="search-input">Search:</label>
                     <input type="text" id="search-input" placeholder="Search node labels..." />
                     <button id="search-btn">Find</button>
+                    <button id="advanced-search-toggle-btn" type="button" title="Show advanced attribute search">Advanced</button>
                     <button id="search-prev-btn" class="search-nav hidden" type="button" title="Previous search result">&lsaquo;</button>
                     <span id="search-result-count" class="search-nav hidden">0 / 0</span>
                     <button id="search-next-btn" class="search-nav hidden" type="button" title="Next search result">&rsaquo;</button>
                     <button id="search-clear-btn">Clear</button>
+                </div>
+
+                <div id="advanced-search-panel" class="advanced-search-panel hidden">
+                    <label for="advanced-search-input">Attributes</label>
+                    <textarea id="advanced-search-input" rows="3" spellcheck="false" placeholder="hasCheckpoints==1&#10;hasGen AND pid==21"></textarea>
+                    <button id="advanced-search-btn" type="button">Find</button>
+                    <span id="advanced-search-status"></span>
                 </div>
 
                 <div class="control-group control-box">

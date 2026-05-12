@@ -141,7 +141,8 @@ body {
 .control-group button.toggle-btn.active,
 #dep-upstream-btn.active,
 #dep-downstream-btn.active,
-#dep-show-btn.active {
+#dep-show-btn.active,
+#advanced-search-toggle-btn.active {
     background: #3498db;
 }
 
@@ -157,6 +158,70 @@ body {
 
 .search-nav.hidden {
     display: none;
+}
+
+.advanced-search-panel.hidden {
+    display: none;
+}
+
+.advanced-search-panel {
+    position: absolute;
+    top: 98px;
+    left: 20px;
+    display: grid;
+    grid-template-columns: auto minmax(320px, 520px) auto;
+    align-items: start;
+    gap: 8px;
+    padding: 10px;
+    background: #34495e;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    z-index: 1001;
+}
+
+.advanced-search-panel label {
+    padding-top: 7px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.advanced-search-panel textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 7px 9px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    resize: vertical;
+}
+
+.advanced-search-panel button {
+    padding: 6px 12px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.3s;
+}
+
+.advanced-search-panel button:hover {
+    background: #2980b9;
+}
+
+#advanced-search-status {
+    grid-column: 2 / 4;
+    color: #ecf0f1;
+    font-size: 12px;
+    min-height: 16px;
+}
+
+#advanced-search-status.error {
+    color: #f5b7b1;
 }
 
 #search-prev-btn,
