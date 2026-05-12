@@ -44,6 +44,7 @@
                     <select id="layout-engine-select">
                         <option value="dagre">Dagre</option>
                         <option value="fcose">fCoSE</option>
+                        <option value="elk">ELK</option>
                     </select>
                     <button id="layout-redo-btn" type="button" title="Recompute the layout using only currently visible nodes">Redo Layout</button>
                     <label class="checkbox-label" for="hide-gen-event-checkbox">
@@ -53,6 +54,10 @@
                     <label class="checkbox-label" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
                         <input type="checkbox" id="hide-simvertex-key0-checkbox" />
                         Hide SimVertex key=0
+                    </label>
+                    <label class="checkbox-label" for="hide-small-subgraphs-checkbox" title="Hide disconnected graph components with fewer than 10 total nodes">
+                        <input type="checkbox" id="hide-small-subgraphs-checkbox" />
+                        Hide subgraphs &lt;10 nodes
                     </label>
                 </div>
             </div>
@@ -198,6 +203,8 @@
     <script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
     <script src="js/bundle.js"></script>

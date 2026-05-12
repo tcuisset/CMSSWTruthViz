@@ -36,6 +36,7 @@ Quick reference guide for all features in the CMSSW Graph Visualization tool.
 
 - **Dagre**: hierarchical layout, similar to Graphviz `dot`
 - **fCoSE**: force-directed layout for compact clustered views
+- **ELK**: layered rightward layout with orthogonal edge routing
 - **Runtime switch**: use the Layout selector in the header
 - **Layout status**: running layouts show a status pill with a cancel button
 

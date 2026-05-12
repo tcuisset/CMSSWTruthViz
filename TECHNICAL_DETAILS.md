@@ -71,6 +71,8 @@ The graph renderer is Cytoscape.js. `index.html` loads these browser libraries f
 - `layout-base`
 - `cose-base`
 - `cytoscape-fcose`
+- `elkjs`
+- `cytoscape-elk`
 
 `GraphManager.init(data)` converts bundle data into Cytoscape elements:
 
@@ -95,15 +97,17 @@ Available layout engines:
 
 - Dagre: default hierarchical layout. It uses top-to-bottom ranks, `network-simplex`, `nodeSep: 40`, `edgeSep: 16`, `rankSep: 90`, and `spacingFactor: 1.1`.
 - fCoSE: optional force-directed layout. It uses `quality: "proof"` and `numIter: 8000`.
+- ELK: optional layered layout. It uses `algorithm: "layered"`, rightward direction, 40px layer spacing, 20px node spacing, and orthogonal edge routing.
 - Breadthfirst fallback: used only if Dagre extension registration is unavailable.
 
-`GraphManager.registerLayoutExtensions()` registers `cytoscape-dagre` and `cytoscape-fcose` if their CDN globals are present.
+`GraphManager.registerLayoutExtensions()` registers `cytoscape-dagre`, `cytoscape-fcose`, and `cytoscape-elk` if their CDN globals are present.
 
 Layouts are run only on currently visible nodes plus edges whose endpoints are visible. Visibility excludes elements with these classes:
 
 - `hidden`
 - `gen-event-filtered`
 - `sim-vertex-key0-filtered`
+- `small-subgraph-filtered`
 
 Layout execution is tracked with `activeLayout`, `layoutRunId`, and `canceledLayoutRunId`. Starting a new layout cancels the previous active layout. The status pill is shown while a layout is running, and the Cancel button calls `layout.stop()` when supported.
 
@@ -131,6 +135,7 @@ Default view filters hide:
 
 - GenEvent nodes, detected by `rawLabel` or fallback `label` containing `GenEvent`.
 - SimVertex key 0 nodes, detected by labels containing `SimVertex` and `key=0`.
+- Optional small disconnected subgraphs, detected as undirected connected components with fewer than 10 total nodes.
 
 These filters are independent from focus/dependency filters, so reset and relayout code needs to preserve the distinction between filter classes.
 

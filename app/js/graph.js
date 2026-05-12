@@ -12,9 +12,12 @@ const GraphManager = {
     selectedLayoutEngine: 'dagre',
     dagreRegistered: false,
     fcoseRegistered: false,
+    elkRegistered: false,
     graphName: '',
     hideGenEventNodes: true,
     hideSimVertexKey0Node: true,
+    hideSmallDisconnectedSubgraphs: false,
+    smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
         gen: '#2e86de',
         sim: '#e67e22',
@@ -356,6 +359,12 @@ const GraphManager = {
                         'display': 'none'
                     }
                 },
+                {
+                    selector: 'node.small-subgraph-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
                 // Edge styles
                 {
                     selector: 'edge',
@@ -389,6 +398,12 @@ const GraphManager = {
                 },
                 {
                     selector: 'edge.sim-vertex-key0-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge.small-subgraph-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -467,6 +482,15 @@ const GraphManager = {
                 console.warn('Could not register cytoscape-fcose', error);
             }
         }
+
+        if (!this.elkRegistered && typeof cytoscapeElk === 'function') {
+            try {
+                cytoscape.use(cytoscapeElk);
+                this.elkRegistered = true;
+            } catch (error) {
+                console.warn('Could not register cytoscape-elk', error);
+            }
+        }
     },
 
     /**
@@ -486,6 +510,28 @@ const GraphManager = {
                 // edgeElasticity: 0.45,
                 // gravity: 0.25,
                 numIter: 8000
+            };
+        }
+
+        if (this.selectedLayoutEngine === 'elk' && this.elkRegistered) {
+            return {
+                name: 'elk',
+                animate: false,
+                fit: false,
+                elk: {
+                    algorithm: 'layered',
+                    'elk.direction': 'DOWN',
+                    'elk.layered.spacing.nodeNodeBetweenLayers': 40,
+                    'elk.spacing.nodeNode': 20,
+                    'elk.edgeRouting': 'ORTHOGONAL'
+
+                    // algorithm: 'stress', // Never ending.....
+                    // 'elk.stress.iterationLimit':10,
+
+                        //   algorithm: 'disco',
+                        // componentLayoutAlgorithm: 'stress',
+                        // 'elk.stress.iterationLimit':10,
+                }
             };
         }
 
@@ -589,6 +635,14 @@ const GraphManager = {
             });
         }
 
+        const hideSmallSubgraphsCheckbox = document.getElementById('hide-small-subgraphs-checkbox');
+        if (hideSmallSubgraphsCheckbox) {
+            hideSmallSubgraphsCheckbox.checked = this.hideSmallDisconnectedSubgraphs;
+            hideSmallSubgraphsCheckbox.addEventListener('change', () => {
+                this.setHideSmallDisconnectedSubgraphs(hideSmallSubgraphsCheckbox.checked);
+            });
+        }
+
         const layoutEngineSelect = document.getElementById('layout-engine-select');
         if (layoutEngineSelect) {
             layoutEngineSelect.value = this.selectedLayoutEngine;
@@ -612,7 +666,7 @@ const GraphManager = {
      * Switch layout engines and recompute positions for visible elements.
      */
     setLayoutEngine(engine) {
-        if (engine !== 'dagre' && engine !== 'fcose') {
+        if (engine !== 'dagre' && engine !== 'fcose' && engine !== 'elk') {
             return;
         }
 
@@ -626,6 +680,7 @@ const GraphManager = {
     applyInitialViewFilters() {
         this.applyGenEventFilter();
         this.applySimVertexKey0Filter();
+        this.applySmallDisconnectedSubgraphFilter();
         this.relayoutVisible();
     },
 
@@ -694,6 +749,70 @@ const GraphManager = {
         const labelAttribute = node.data('rawLabel') || node.data('label') || '';
         const label = String(labelAttribute);
         return label.includes('SimVertex') && /\bkey=0\b/.test(label);
+    },
+
+    /**
+     * Hide disconnected components whose total size is below the configured limit.
+     */
+    setHideSmallDisconnectedSubgraphs(shouldHide) {
+        this.hideSmallDisconnectedSubgraphs = shouldHide;
+        this.applySmallDisconnectedSubgraphFilter();
+        this.relayoutVisible();
+    },
+
+    /**
+     * Apply the small disconnected subgraph filter without disturbing other filters.
+     */
+    applySmallDisconnectedSubgraphFilter() {
+        this.cy.nodes().removeClass('small-subgraph-filtered');
+        this.cy.edges().removeClass('small-subgraph-filtered');
+
+        if (!this.hideSmallDisconnectedSubgraphs) {
+            return;
+        }
+
+        this.getSmallDisconnectedSubgraphNodes().addClass('small-subgraph-filtered');
+        this.cy.nodes('.small-subgraph-filtered').connectedEdges().addClass('small-subgraph-filtered');
+    },
+
+    /**
+     * Connected components are computed as undirected components over the full graph.
+     */
+    getSmallDisconnectedSubgraphNodes() {
+        const visited = new Set();
+        let nodesToHide = this.cy.collection();
+
+        this.cy.nodes().forEach(startNode => {
+            if (visited.has(startNode.id())) {
+                return;
+            }
+
+            const componentNodes = [];
+            const stack = [startNode];
+            visited.add(startNode.id());
+
+            while (stack.length > 0) {
+                const node = stack.pop();
+                componentNodes.push(node);
+
+                node.connectedEdges().forEach(edge => {
+                    const source = edge.source();
+                    const target = edge.target();
+                    const neighbor = source.id() === node.id() ? target : source;
+
+                    if (!visited.has(neighbor.id())) {
+                        visited.add(neighbor.id());
+                        stack.push(neighbor);
+                    }
+                });
+            }
+
+            if (componentNodes.length < this.smallDisconnectedSubgraphNodeLimit) {
+                nodesToHide = nodesToHide.union(this.cy.collection(componentNodes));
+            }
+        });
+
+        return nodesToHide;
     },
 
     /**
@@ -805,6 +924,7 @@ const GraphManager = {
         this.cy.edges().removeClass('highlighted dimmed selected hidden');
         this.applyGenEventFilter();
         this.applySimVertexKey0Filter();
+        this.applySmallDisconnectedSubgraphFilter();
         this.fitVisible();
     },
 
@@ -920,7 +1040,9 @@ const GraphManager = {
     },
 
     getSelectedLayoutLabel() {
-        return this.selectedLayoutEngine === 'fcose' ? 'fCoSE' : 'Dagre';
+        if (this.selectedLayoutEngine === 'fcose') return 'fCoSE';
+        if (this.selectedLayoutEngine === 'elk') return 'ELK';
+        return 'Dagre';
     },
 
     /**
@@ -933,13 +1055,15 @@ const GraphManager = {
     isNodeVisibleForLayout(node) {
         return !node.hasClass('hidden')
             && !node.hasClass('gen-event-filtered')
-            && !node.hasClass('sim-vertex-key0-filtered');
+            && !node.hasClass('sim-vertex-key0-filtered')
+            && !node.hasClass('small-subgraph-filtered');
     },
 
     isEdgeVisibleForLayout(edge) {
         return !edge.hasClass('hidden')
             && !edge.hasClass('gen-event-filtered')
             && !edge.hasClass('sim-vertex-key0-filtered')
+            && !edge.hasClass('small-subgraph-filtered')
             && this.isNodeVisibleForLayout(edge.source())
             && this.isNodeVisibleForLayout(edge.target());
     },

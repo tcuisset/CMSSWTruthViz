@@ -342,6 +342,7 @@ Click any previous module to jump back in the history.
 The graph layout can be switched at runtime:
 - **Dagre**: hierarchical layout, similar in spirit to Graphviz `dot`
 - **fCoSE**: force-directed layout for compact clustered views
+- **ELK**: layered rightward layout with orthogonal edge routing
 - Node labels are visible by default with semi-transparent backgrounds
 
 ## Troubleshooting
@@ -393,7 +394,7 @@ Edit `app/js/graph.js` and change the layout configuration:
 
 ```javascript
 layout: {
-    name: 'dagre',  // Or: 'fcose'
+    name: 'dagre',  // Or: 'fcose', 'elk'
     // ... other options
 }
 ```
