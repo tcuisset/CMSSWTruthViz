@@ -13,7 +13,7 @@ import sys
 import json
 import subprocess
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 import cgi
 
 
@@ -48,10 +48,11 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         """Handle POST requests for file uploads"""
-        if self.path == '/upload':
+        path = urlparse(self.path).path.rstrip('/')
+        if path == '/upload' or path.endswith('/upload'):
             self.handle_upload()
         else:
-            self.send_error(404, "Not Found")
+            self.send_json_response({'success': False, 'error': 'Not Found'}, 404)
 
     def handle_upload(self):
         """Handle file upload and bundle regeneration"""

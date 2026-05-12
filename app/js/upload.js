@@ -130,7 +130,16 @@ const UploadManager = {
                 body: formData
             });
 
-            const result = await response.json();
+            const responseText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (error) {
+                const message = response.ok
+                    ? 'Upload response was not valid JSON'
+                    : `Upload failed with HTTP ${response.status}`;
+                throw new Error(message);
+            }
 
             if (result.success) {
                 this.uploadStatus.textContent = 'Bundle regenerated successfully! Reloading...';
