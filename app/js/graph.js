@@ -281,6 +281,14 @@ const GraphManager = {
         return this.defaultNodeSize;
     },
 
+    getNodeFontSize(ele) {
+        const type = this.getNodeKind(ele);
+        if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex' || this.isLogicalVertex(ele)) {
+            return 10;
+        }
+        return 20;
+    },
+
     getNodeBorderColor(ele) {
         if (this.hasCrossedBoundary(ele)) return '#e804ec';
         if (this.isLogicalGenSimNode(ele)) return this.nodeTypeColors.sim;
@@ -336,7 +344,9 @@ const GraphManager = {
                         'label': 'data(label)',
                         'text-valign': 'center',
                         'text-halign': 'center',
-                        'font-size': 10,
+                        'font-size': function(ele) {
+                            return GraphManager.getNodeFontSize(ele);
+                        },
                         'font-weight': 600,
                         'text-wrap': 'wrap',
                         'text-max-width': function(ele) {
