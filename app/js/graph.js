@@ -921,7 +921,7 @@ const GraphManager = {
 
     isPartonShowerNode(node) {
         const status = Number.parseInt(node.data('status'), 10);
-        return (status > 30 && status < 70) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
+        return (status > 30 && status < 80 && status!=62 && Math.abs(this.getParticlePdgId(node))!=6) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
     },
 
     getSingleChildParentVertices(partonShowerNodes) {
