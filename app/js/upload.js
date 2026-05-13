@@ -1,6 +1,6 @@
 /**
  * upload.js - File upload functionality
- * Handles uploading a DOT graph, then regenerating the bundle
+ * Handles uploading a DOT graph and optional ROOT rechits file.
  */
 
 const UploadManager = {
@@ -8,6 +8,8 @@ const UploadManager = {
     form: null,
     dotFileInput: null,
     dotFileInfo: null,
+    rootFileInput: null,
+    rootFileInfo: null,
     uploadProgress: null,
     uploadStatus: null,
     submitBtn: null,
@@ -20,6 +22,8 @@ const UploadManager = {
         this.form = document.getElementById('upload-form');
         this.dotFileInput = document.getElementById('dot-file-input');
         this.dotFileInfo = document.getElementById('dot-file-info');
+        this.rootFileInput = document.getElementById('root-file-input');
+        this.rootFileInfo = document.getElementById('root-file-info');
         this.uploadProgress = document.getElementById('upload-progress');
         this.uploadStatus = document.getElementById('upload-status');
         this.submitBtn = document.getElementById('upload-submit-btn');
@@ -56,6 +60,9 @@ const UploadManager = {
         this.dotFileInput.addEventListener('change', (e) => {
             this.updateFileInfo(e.target, this.dotFileInfo);
         });
+        this.rootFileInput.addEventListener('change', (e) => {
+            this.updateFileInfo(e.target, this.rootFileInfo);
+        });
 
         // Form submit
         this.form.addEventListener('submit', (e) => {
@@ -86,6 +93,7 @@ const UploadManager = {
     resetForm() {
         this.form.reset();
         this.dotFileInfo.textContent = 'No file selected';
+        this.rootFileInfo.textContent = 'No file selected';
         this.uploadProgress.classList.add('hidden');
         this.submitBtn.disabled = false;
     },
@@ -108,6 +116,7 @@ const UploadManager = {
      */
     async handleUpload() {
         const dotFile = this.dotFileInput.files[0];
+        const rootFile = this.rootFileInput.files[0];
 
         if (!dotFile) {
             alert('Please select a DOT graph file');
@@ -123,6 +132,9 @@ const UploadManager = {
             // Create form data
             const formData = new FormData();
             formData.append('dotFile', dotFile);
+            if (rootFile) {
+                formData.append('rootFile', rootFile);
+            }
 
             // Upload files
             const response = await fetch('../upload', {
@@ -133,10 +145,10 @@ const UploadManager = {
             const result = await this.parseJsonResponse(response, 'Upload');
 
             if (result.success) {
-                this.uploadStatus.textContent = 'Upload complete. Building bundle...';
+                this.uploadStatus.textContent = 'Upload complete. Processing files...';
                 await this.waitForBundleBuild();
 
-                this.uploadStatus.textContent = 'Bundle regenerated successfully! Reloading...';
+                this.uploadStatus.textContent = 'Files processed successfully! Reloading...';
 
                 // Wait a bit then reload the page
                 setTimeout(() => {

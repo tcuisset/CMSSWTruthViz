@@ -219,15 +219,20 @@
                 <button id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Upload a DOT graph to regenerate the bundle.</p>
+                <p>Upload a DOT graph and, optionally, a ROOT file with rechits.</p>
                 <form id="upload-form">
                     <div class="form-group">
                         <label for="dot-file-input">Graph (truthgraph.dot):</label>
                         <input type="file" id="dot-file-input" accept=".gv,.dot" required>
                         <span class="file-info" id="dot-file-info">No file selected</span>
                     </div>
+                    <div class="form-group">
+                        <label for="root-file-input">Rechits ROOT file (nano_out.root):</label>
+                        <input type="file" id="root-file-input" accept=".root">
+                        <span class="file-info" id="root-file-info">No file selected</span>
+                    </div>
                     <div class="form-actions">
-                        <button type="submit" id="upload-submit-btn">Upload & Regenerate</button>
+                        <button type="submit" id="upload-submit-btn">Upload & Process</button>
                         <button type="button" id="upload-cancel-btn">Cancel</button>
                     </div>
                     <div id="upload-progress" class="hidden">

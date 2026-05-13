@@ -52,8 +52,8 @@ def set_build_status(**updates):
         BUILD_STATUS.update(updates)
 
 
-def run_bundle_build(project_root, dot_path):
-    """Regenerate the graph bundle in the background after an upload."""
+def run_uploaded_build(project_root, dot_path, root_path=None):
+    """Regenerate uploaded graph and optional rechits data in the background."""
     try:
         set_build_status(
             state="running",
@@ -91,24 +91,60 @@ def run_bundle_build(project_root, dot_path):
 
         print("  Bundle generated successfully!")
         print(result.stdout)
+
+        if root_path is not None:
+            set_build_status(
+                state="running",
+                message="Regenerating rechits data...",
+            )
+            print("\nRegenerating rechits data...")
+            rechits_script = project_root / "preprocess" / "build_rechits_json.py"
+            rechits_args = [
+                sys.executable,
+                str(rechits_script),
+                str(root_path),
+                str(project_root / "data" / "rechits.json"),
+            ]
+
+            result = subprocess.run(
+                rechits_args,
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or "unknown error"
+                print(f"  ERROR: {error_msg}")
+                set_build_status(
+                    state="error",
+                    message=f"Rechits generation failed: {error_msg}",
+                    finishedAt=time.time(),
+                )
+                return
+
+            print("  Rechits data generated successfully!")
+            print(result.stdout)
+
         set_build_status(
             state="success",
-            message="Bundle regenerated successfully.",
+            message="Upload processing completed successfully.",
             finishedAt=time.time(),
         )
 
     except subprocess.TimeoutExpired:
         set_build_status(
             state="error",
-            message="Bundle generation timed out.",
+            message="Upload processing timed out.",
             finishedAt=time.time(),
         )
     except Exception as e:
         print(f"  ERROR: {str(e)}")
         set_build_status(
             state="error",
-            message=f"Bundle generation failed: {str(e)}",
-            finishedAt=time.time(),
+                message=f"Upload processing failed: {str(e)}",
+                finishedAt=time.time(),
         )
 
 
@@ -165,9 +201,10 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             )
 
             # Get uploaded files
-            dot_file = form['dotFile'].file if 'dotFile' in form else None
+            dot_item = self.get_upload_item(form, 'dotFile')
+            root_item = self.get_upload_item(form, 'rootFile')
 
-            if not dot_file:
+            if not dot_item:
                 self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
                 return
 
@@ -183,28 +220,34 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Save files
             dot_path = project_root / "truthgraph.dot"
+            root_path = project_root / "rechits.root" if root_item else None
 
-            print("\nSaving uploaded file...")
+            print("\nSaving uploaded files...")
             with open(dot_path, 'wb') as f:
-                f.write(dot_file.read())
+                f.write(dot_item.file.read())
             print(f"  Saved: {dot_path}")
+
+            if root_item:
+                with open(root_path, 'wb') as f:
+                    f.write(root_item.file.read())
+                print(f"  Saved: {root_path}")
 
             set_build_status(
                 state="queued",
-                message="DOT file uploaded. Bundle generation is starting...",
+                message="Input files uploaded. Processing is starting...",
                 startedAt=time.time(),
                 finishedAt=None,
             )
             thread = threading.Thread(
-                target=run_bundle_build,
-                args=(project_root, dot_path),
+                target=run_uploaded_build,
+                args=(project_root, dot_path, root_path),
                 daemon=True,
             )
             thread.start()
 
             self.send_json_response({
                 'success': True,
-                'message': 'DOT file uploaded. Bundle generation is running.',
+                'message': 'Input files uploaded. Processing is running.',
                 'build': get_build_status(),
             }, 202)
 
@@ -214,6 +257,20 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'success': False,
                 'error': f'Upload failed: {str(e)}'
             }, 500)
+
+    def get_upload_item(self, form, key):
+        """Return a file upload item only when the field has a selected file."""
+        if key not in form:
+            return None
+
+        item = form[key]
+        if isinstance(item, list):
+            item = item[0] if item else None
+
+        if item is None or not getattr(item, 'filename', None) or not getattr(item, 'file', None):
+            return None
+
+        return item
 
     def send_json_response(self, data, status=200):
         """Send JSON response"""
