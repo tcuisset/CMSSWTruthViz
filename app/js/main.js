@@ -32,9 +32,11 @@ async function initApp() {
             // Static mode: Use embedded data
             console.log('Loading embedded bundle data...');
             window.bundleData = window.EMBEDDED_BUNDLE_DATA;
+            attachEmbeddedRechitsData();
             console.log('Embedded bundle data loaded:', {
                 nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length
+                edges: window.bundleData.edges.length,
+                rechits: window.bundleData.rechits?.length || 0
             });
         } else {
             // Server mode: Fetch from server
@@ -45,9 +47,11 @@ async function initApp() {
             }
 
             window.bundleData = await response.json();
+            await attachServerRechitsData();
             console.log('Bundle data loaded from server:', {
                 nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length
+                edges: window.bundleData.edges.length,
+                rechits: window.bundleData.rechits?.length || 0
             });
         }
 
@@ -56,6 +60,7 @@ async function initApp() {
 
         // Initialize UI components
         PanelManager.init();
+        Plot3DPanelManager.init(window.bundleData);
         SearchManager.init();
         EgoGraphManager.init();
         DependencyExplorer.init();
@@ -91,6 +96,39 @@ async function initApp() {
         console.error('Error initializing application:', error);
         showLoading(false);
         alert(`Failed to initialize application: ${error.message}`);
+    }
+}
+
+/**
+ * Attach optional static-mode rechits data if app/js/rechits.js was generated.
+ */
+function attachEmbeddedRechitsData() {
+    if (!window.EMBEDDED_RECHITS_DATA?.rechits) {
+        return;
+    }
+
+    window.bundleData.rechits = window.EMBEDDED_RECHITS_DATA.rechits;
+    window.bundleData.rechitsMetadata = window.EMBEDDED_RECHITS_DATA.metadata;
+}
+
+/**
+ * Attach optional server-mode rechits data from data/rechits.json.
+ */
+async function attachServerRechitsData() {
+    try {
+        const response = await fetch('../data/rechits.json');
+        if (!response.ok) {
+            console.warn(`Rechits data not loaded: ${response.status} ${response.statusText}`);
+            return;
+        }
+
+        const rechitsData = await response.json();
+        if (Array.isArray(rechitsData.rechits)) {
+            window.bundleData.rechits = rechitsData.rechits;
+            window.bundleData.rechitsMetadata = rechitsData.metadata;
+        }
+    } catch (error) {
+        console.warn('Rechits data not loaded:', error);
     }
 }
 

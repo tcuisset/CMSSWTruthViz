@@ -85,6 +85,11 @@
             <div class="controls-section" id="stats">
                 <span id="node-count">Nodes: -</span>
                 <span id="edge-count">Edges: -</span>
+                <div id="plot3d-mode-toggle" class="mode-toggle" role="group" aria-label="3D display mode">
+                    <button id="plot3d-hide-btn" class="active" type="button" data-plot3d-mode="hidden" title="Hide 3D display">Hide</button>
+                    <button id="plot3d-direct-btn" type="button" data-plot3d-mode="direct" title="Show selected node direct rechits">Direct hits</button>
+                    <button id="plot3d-subgraph-btn" type="button" data-plot3d-mode="subgraph" title="Show selected node and descendant rechits">Subgraph hits</button>
+                </div>
                 <button id="export-png-btn" type="button" title="Save current graph view as PNG">Save PNG</button>
                 <button id="export-pdf-btn" type="button" title="Save current graph view as PDF">Save PDF</button>
                 <button id="upload-btn" style="margin-left: 20px;">Upload Files</button>
@@ -149,6 +154,19 @@
                 </div>
             </div>
 
+            <!-- Plotly 3D Panel -->
+            <div id="plot3d-panel" class="hidden">
+                <div id="plot3d-header">
+                    <div>
+                        <h2>Direct Rechits</h2>
+                        <div id="plot3d-subtitle">Select a node to view direct hits</div>
+                    </div>
+                    <button id="plot3d-close-btn" type="button" title="Hide 3D panel">&times;</button>
+                </div>
+                <div id="plot3d-container"></div>
+                <div id="plot3d-empty" class="hidden">No direct rechits for this node</div>
+            </div>
+
             <!-- Side Panel -->
             <div id="side-panel" class="hidden">
                 <div id="panel-resize-handle"></div>
@@ -165,6 +183,7 @@
                             <span><strong>Name</strong> <span id="node-particle-name">-</span></span>
                             <span><strong>PDG ID</strong> <span id="node-pdg-id">-</span></span>
                             <span><strong>Energy</strong> <span id="node-energy">-</span></span>
+                            <span><strong>p4 (pt, eta, phi, mass)</strong> <span id="node-momentum">-</span></span>
                         </div>
                     </div>
 
@@ -232,14 +251,17 @@
     <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
     <script src="js/bundle.js"></script>
+    <script src="js/rechits.js"></script>
 
     <!-- Application Scripts -->
     <script src="js/utils.js"></script>
     <script src="js/graph.js"></script>
     <script src="js/panel.js"></script>
+    <script src="js/plot3d.js"></script>
     <script src="js/search.js"></script>
     <script src="js/ego.js"></script>
     <script src="js/dependency.js"></script>

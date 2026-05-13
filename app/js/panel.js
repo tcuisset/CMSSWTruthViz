@@ -105,6 +105,8 @@ const PanelManager = {
             this.updateBreadcrumbs();
             this.panel.classList.remove('hidden');
 
+            Plot3DPanelManager.updateForNode(nodeData.id);
+
             if (nodeId) {
                 GraphManager.highlightNode(nodeId);
             }
@@ -124,6 +126,7 @@ const PanelManager = {
         document.getElementById('node-particle-name').innerHTML = this.getParticleNiceName(nodeData);
         document.getElementById('node-pdg-id').textContent = this.formatValue(this.getPdgId(nodeData));
         document.getElementById('node-energy').textContent = this.formatEnergy(this.getEnergy(nodeData));
+        document.getElementById('node-momentum').textContent = this.formatMomentum(this.getMomentum(nodeData));
 
         const ignoredKeys = new Set(['id', 'label', 'displayLabel', 'detailLabel', 'rawLabel']);
         const parameters = {};
@@ -328,6 +331,10 @@ const PanelManager = {
         return GraphManager.getNodeEnergy(this.makeDataAccessor(data));
     },
 
+    getMomentum(data) {
+        return this.convertP4ToMomentum(data.p4);
+    },
+
     makeDataAccessor(data) {
         return {
             id: () => data.id,
@@ -345,6 +352,59 @@ const PanelManager = {
 
     formatEnergy(value) {
         return Number.isFinite(value) ? value.toFixed(3) : 'N/A';
+    },
+
+    parseP4(value) {
+        let parts;
+
+        if (Array.isArray(value)) {
+            parts = value;
+        } else if (typeof value === 'string') {
+            const cleaned = value.trim().replace(/^<|>$/g, '').trim();
+            const tupleText = cleaned.startsWith('(') && cleaned.endsWith(')')
+                ? cleaned.slice(1, -1)
+                : cleaned;
+            parts = tupleText.split(',').map(part => part.trim());
+        } else {
+            return null;
+        }
+
+        if (parts.length < 4) return null;
+
+        const [px, py, pz, energy] = parts.slice(0, 4).map(Number.parseFloat);
+        if (![px, py, pz, energy].every(Number.isFinite)) return null;
+
+        return { px, py, pz, energy };
+    },
+
+    convertP4ToMomentum(value) {
+        const p4 = this.parseP4(value);
+        if (!p4) return null;
+
+        const { px, py, pz, energy } = p4;
+        const pt = Math.hypot(px, py);
+        const phi = Math.atan2(py, px);
+        const eta = pt === 0
+            ? (pz === 0 ? 0 : Math.sign(pz) * Infinity)
+            : Math.asinh(pz / pt);
+        const massSquared = energy * energy - px * px - py * py - pz * pz;
+        const mass = massSquared >= 0
+            ? Math.sqrt(massSquared)
+            : (Math.abs(massSquared) < 1e-9 ? 0 : NaN);
+
+        return { pt, eta, phi, mass };
+    },
+
+    formatMomentum(momentum) {
+        if (!momentum) return 'N/A';
+
+        const formatComponent = value => {
+            if (value === Infinity) return '+Infinity';
+            if (value === -Infinity) return '-Infinity';
+            return Number.isFinite(value) ? value.toFixed(3) : 'N/A';
+        };
+
+        return `(${formatComponent(momentum.pt)}, ${formatComponent(momentum.eta)}, ${formatComponent(momentum.phi)}, ${formatComponent(momentum.mass)})`;
     },
 
     /**
@@ -435,6 +495,7 @@ const PanelManager = {
         document.getElementById('node-particle-name').textContent = 'N/A';
         document.getElementById('node-pdg-id').textContent = 'N/A';
         document.getElementById('node-energy').textContent = 'N/A';
+        document.getElementById('node-momentum').textContent = 'N/A';
         document.getElementById('connected-towards-list').innerHTML = '<div class="empty-state">No connected nodes</div>';
         document.getElementById('connected-away-list').innerHTML = '<div class="empty-state">No connected nodes</div>';
         document.getElementById('parameters-list').innerHTML = '<div class="empty-state">No attributes</div>';

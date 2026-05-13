@@ -1147,6 +1147,13 @@ const GraphManager = {
         node.addClass('selected');
         node.connectedEdges().addClass('selected');
         KeyboardNav.selectedNode = node;
+
+        document.dispatchEvent(new CustomEvent('nodeSelected', {
+            detail: {
+                nodeId: node.id(),
+                nodeName: node.data('label') || node.id()
+            }
+        }));
     },
 
     /**
@@ -1203,6 +1210,8 @@ const GraphManager = {
         this.cy.nodes().removeClass('selected');
         this.cy.edges().removeClass('selected');
         KeyboardNav.selectedNode = null;
+
+        document.dispatchEvent(new CustomEvent('nodeSelectionCleared'));
     },
 
     /**

@@ -491,3 +491,29 @@ For issues or questions:
 ---
 
 **Built for CMSSW workflow exploration** | Powered by Cytoscape.js
+
+
+
+
+Summary
+Add a second details panel for a Plotly 3D visualization that updates when the selected Cytoscape node changes. The current app is a plain JavaScript frontend served by server.py, with graph data prebuilt into bundle.json / bundle.js; there is no Dash runtime in this repo today.
+
+ start with a client-side Plotly panel, the 3D data can be derived from existing node attributes 
+
+## UI
+The 3D display is can appear or disappear (with a button to show/hide it). Wen shown, it takes the right half of the screen. It should not hide toolbar buttons. It consists of a plotly plot.
+
+## Data for 3D plot
+There will be additional data in the jsons from server to client (can be in same or a different json).
+Each node in the already-existing graph will have two new fields : "directHitsDetIds" (list of IDs) and "directHitsEnergies" (list of energies, same length as directHitsDetIds). 
+An additional data set (independent of the graph) will have a list of "rechits" where each rechit has properties : ID, x, y, z, energy. The x,y,z are used to plot a scatter on the 3D display
+WHen a node in the graph is clicked, the "directHitsDetIds" field is used to select out of the rechits only those that have their ID in the "directHitsDetIds" list.
+For now just ignore the energy.
+
+## Potential plan (guideline, can be updated depending on requirements)
+Add a Plot3DPanelManager beside PanelManager.
+Load Plotly.js in index.html.
+On node selection, call both:
+PanelManager.open(label, nodeId)
+Plot3DPanelManager.updateForNode(nodeId)
+Keep static mode working because all data is already in the browser.
