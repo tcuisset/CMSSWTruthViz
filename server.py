@@ -204,7 +204,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             dot_item = self.get_upload_item(form, 'dotFile')
             root_item = self.get_upload_item(form, 'rootFile')
 
-            if not dot_item:
+            if dot_item is None:
                 self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
                 return
 
@@ -220,14 +220,14 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Save files
             dot_path = project_root / "truthgraph.dot"
-            root_path = project_root / "rechits.root" if root_item else None
+            root_path = project_root / "rechits.root" if root_item is not None else None
 
             print("\nSaving uploaded files...")
             with open(dot_path, 'wb') as f:
                 f.write(dot_item.file.read())
             print(f"  Saved: {dot_path}")
 
-            if root_item:
+            if root_item is not None:
                 with open(root_path, 'wb') as f:
                     f.write(root_item.file.read())
                 print(f"  Saved: {root_path}")
