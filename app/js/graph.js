@@ -30,6 +30,8 @@ const GraphManager = {
     defaultNodeSize: 58,
     vertexNodeSize: 30,
     eventNodeSize: 88,
+    statusOneNodeSizeMultiplier: 1.1,
+    statusOneNodeColor: '#ff9589',
     smallParticlePdgIds: new Set([22, 11, -11]),
 
     htmlLabelToCanvasText(value) {
@@ -247,7 +249,13 @@ const GraphManager = {
         return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true' || value2 == "1";
     },
 
+    hasStatusOne(ele) {
+        return String(ele.data('status')).trim() === '1';
+    },
+
     getNodeFillColor(ele) {
+        if (this.hasStatusOne(ele)) return this.statusOneNodeColor;
+
         const type = this.getNodeKind(ele);
         if (type.startsWith('GenSim')) return this.nodeTypeColors.genSim;
         if (type === 'GenEvent') return this.nodeTypeColors.event;
@@ -261,6 +269,8 @@ const GraphManager = {
     },
 
     getNodeShape(ele) {
+        if (this.hasStatusOne(ele)) return 'rectangle';
+
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 'star';
         if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return 'diamond';
@@ -282,7 +292,8 @@ const GraphManager = {
         if (type === 'GenParticle' || type === 'SimTrack' || type === 'GenSimParticle' || type === 'LogicalParticle' || this.isParticleNode(ele)) {
             const particleId = this.getParticlePdgId(ele);
             const scale = this.smallParticlePdgIds.has(particleId) ? 0.5 : 1;
-            return this.defaultNodeSize * scale;
+            const statusScale = this.hasStatusOne(ele) ? this.statusOneNodeSizeMultiplier : 1;
+            return this.defaultNodeSize * scale * statusScale;
         }
         return this.defaultNodeSize;
     },
