@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build rechits JSON data from the first event of a ROOT Events tree.
+Build rechits JSON data from one event of a ROOT Events tree.
 """
 
 import argparse
@@ -18,15 +18,18 @@ BRANCHES = {
 
 
 def to_float_list(values):
-    """Convert a first-event branch payload to a plain JSON-safe float list."""
+    """Convert one event branch payload to a plain JSON-safe float list."""
     return [float(value) for value in values]
 
 
-def load_first_event_rechits(root_path, tree_name="Events"):
+def load_event_rechits(root_path, tree_name="Events", event_index=0):
     try:
         import uproot
     except ImportError as exc:
         raise RuntimeError("uproot is required. Install dependencies from requirements.txt.") from exc
+
+    if event_index < 0:
+        raise ValueError(f"Event index must be non-negative, got {event_index}")
 
     with uproot.open(root_path) as root_file:
         if tree_name not in root_file:
@@ -34,11 +37,22 @@ def load_first_event_rechits(root_path, tree_name="Events"):
             raise KeyError(f"Tree {tree_name!r} not found in {root_path}. Available keys: {available}")
 
         tree = root_file[tree_name]
+        if event_index >= tree.num_entries:
+            raise IndexError(
+                f"Event index {event_index} is out of range for tree {tree_name!r} "
+                f"with {tree.num_entries} entries"
+            )
+
         missing_branches = [branch for branch in BRANCHES.values() if branch not in tree.keys()]
         if missing_branches:
             raise KeyError(f"Missing required branches: {', '.join(missing_branches)}")
 
-        arrays = tree.arrays(list(BRANCHES.values()), entry_start=0, entry_stop=0+1, library="np")
+        arrays = tree.arrays(
+            list(BRANCHES.values()),
+            entry_start=event_index,
+            entry_stop=event_index + 1,
+            library="np",
+        )
 
     vectors = {
         key: to_float_list(arrays[branch_name][0])
@@ -47,7 +61,7 @@ def load_first_event_rechits(root_path, tree_name="Events"):
 
     lengths = {key: len(values) for key, values in vectors.items()}
     if len(set(lengths.values())) != 1:
-        raise ValueError(f"Branch lengths differ in first event: {lengths}")
+        raise ValueError(f"Branch lengths differ in event {event_index}: {lengths}")
 
     rechits = [
         {
@@ -63,14 +77,14 @@ def load_first_event_rechits(root_path, tree_name="Events"):
     return rechits
 
 
-def build_rechits_payload(root_path, tree_name="Events"):
-    rechits = load_first_event_rechits(root_path, tree_name)
+def build_rechits_payload(root_path, tree_name="Events", event_index=0):
+    rechits = load_event_rechits(root_path, tree_name, event_index)
     return {
         "rechits": rechits,
         "metadata": {
             "source": str(root_path),
             "tree": tree_name,
-            "event_index": 0,
+            "event_index": event_index,
             "rechit_count": len(rechits),
             "branches": BRANCHES,
         },
@@ -100,15 +114,15 @@ console.log('Embedded rechits data loaded:', {{
         output_file.write(js_content)
 
 
-def build_rechits_json(root_path, output_path, tree_name="Events", js_output_path=None):
-    payload = build_rechits_payload(root_path, tree_name)
+def build_rechits_json(root_path, output_path, tree_name="Events", js_output_path=None, event_index=0):
+    payload = build_rechits_payload(root_path, tree_name, event_index)
 
     print("=" * 60)
     print("Building Rechits JSON")
     print("=" * 60)
     print(f"ROOT input: {root_path}")
     print(f"Tree: {tree_name}")
-    print(f"Event index: 0")
+    print(f"Event index: {event_index}")
     print(f"Rechits: {len(payload['rechits']):,}")
 
     print(f"\nWriting JSON: {output_path}")
@@ -126,7 +140,7 @@ def build_rechits_json(root_path, output_path, tree_name="Events", js_output_pat
 
 def main():
     project_root = Path(__file__).parent.parent
-    parser = argparse.ArgumentParser(description="Build rechits JSON from the first event in a ROOT file.")
+    parser = argparse.ArgumentParser(description="Build rechits JSON from one event in a ROOT file.")
     parser.add_argument(
         "root_file",
         nargs="?",
@@ -142,6 +156,12 @@ def main():
         help="Output JSON path. Defaults to data/rechits.json.",
     )
     parser.add_argument("--tree", default="Events", help="ROOT tree name. Defaults to Events.")
+    parser.add_argument(
+        "--event-index",
+        type=int,
+        default=0,
+        help="Zero-based event index to extract. Defaults to 0.",
+    )
     parser.add_argument(
         "--js-output",
         type=Path,
@@ -161,7 +181,7 @@ def main():
 
     js_output = None if args.no_js_output else args.js_output
     # try:
-    build_rechits_json(args.root_file, args.output_file, args.tree, js_output)
+    build_rechits_json(args.root_file, args.output_file, args.tree, js_output, args.event_index)
     # except Exception as exc:
     #     print(f"Error: {exc}", file=sys.stderr)
     #     sys.exit(1)

@@ -24,43 +24,7 @@ This tool combines graph topology from Graphviz DOT files with detailed module c
 ## Prerequisites
 
 ### Required Software
-
-- **Python 3.6 or higher**
-  - Check version: `python3 --version`
-  - Install if needed:
-    - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
-    - CentOS/RHEL: `sudo yum install python3 python3-pip`
-    - macOS: `brew install python3`
-
-- **pip** (Python package installer)
-  - Usually comes with Python 3.6+
-  - Check: `pip --version` or `pip3 --version`
-
-- **graphviz** (system package for pydot)
-  - Ubuntu/Debian: `sudo apt install graphviz`
-  - CentOS/RHEL: `sudo yum install graphviz`
-  - macOS: `brew install graphviz`
-
-### Python Dependencies (auto-installed by run.sh)
-
-- `pydot>=1.4.2` - Graphviz DOT file parsing
-- `networkx>=2.5` - Graph data structures and algorithms
-
-These are automatically installed when you run `./run.sh` for the first time.
-
-### Input Files (Required for First Run)
-
-Place these files in the project root directory:
-
-- **`dependency.gv`** - Graphviz DOT file with module dependencies
-  - Format: Graphviz digraph or graph
-  - Nodes should have `label` attribute matching module names
-
-- **`dumpConfig.py`** - CMSSW configuration dump
-  - Generate with: `cmsRun yourconfig.py --dump > dumpConfig.py`
-  - Contains full module definitions with parameters
-
-**Note:** If you already have `data/bundle.json`, these files are optional (the app will use the existing bundle).
+python, graphviz, installing the python virtual environment (automatically installed when you run `./run.sh` for the first time.)
 
 ## Two Ways to Use
 
@@ -78,8 +42,6 @@ xdg-open app/index.html          # Linux
 start app/index.html             # Windows
 # Or just double-click app/index.html
 ```
-
-**Perfect for:** Quick viewing, sharing with colleagues, presentations
 
 **See [STATIC_MODE.md](STATIC_MODE.md) for details**
 
@@ -116,7 +78,6 @@ The script automatically handles the complete setup:
    - Ensures packages are installed in the project venv
 
 3. ✅ **Installs Python dependencies** (if not already installed)
-   - Checks for `pydot` and `networkx`
    - Runs `pip install -r preprocess/requirements.txt` if needed
 
 4. ✅ **Generates data bundle** (if missing, stale, or using a different DOT file)
@@ -131,18 +92,6 @@ The script automatically handles the complete setup:
 Then open the **Application URL** printed by the server, usually: **http://localhost:8009/app/**
 
 ### Requirements for run.sh
-
-Before running `./run.sh`, ensure you have:
-
-- ✅ **Python 3.6+** installed (`python3 --version`)
-- ✅ **pip** available (`pip --version` or `pip3 --version`)
-- ✅ **graphviz** system package installed (for pydot)
-- ✅ **Input files** in project root (only if bundle.json doesn't exist):
-  - `dependency.gv`
-  - `dumpConfig.py`
-
-**That's it!** The script handles everything else.
-
 **For detailed platform-specific installation instructions, see [INSTALL.md](INSTALL.md)**
 
 ## Installation
@@ -212,14 +161,6 @@ For implementation details, see [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md). It
 - **Select node**: Click on any module box
 - **View details**: Click opens the side panel with full module info
 
-**Node Colors:**
-- 🟢 **Green**: Reconstruction modules (reco workflow)
-- ⚪ **Gray**: Analysis modules (PAT/analysis workflow)
-
-**Node Shapes:**
-- ◆ **Diamond**: EDFilter modules
-- ▭ **Rectangle**: EDProducer and EDAnalyzer modules
-
 ### Search
 
 1. Enter module name in the **Search** field (top left)
@@ -231,15 +172,6 @@ For implementation details, see [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md). It
 **Example:** Search for "hgcalMergeLayerClusters"
 
 ### Side Panel Features
-
-**Module Information:**
-- **Type**: EDProducer, EDFilter, or EDAnalyzer
-- **Plugin**: C++ plugin class name
-- **Input Tags**: Clickable links to producer modules
-  - Click any InputTag to navigate to that module
-  - VInputTag groups are shown with expandable lists
-- **Parameters**: All module parameters with types and values
-- **Raw Configuration**: Full Python config snippet
 
 **Resizable Panel:**
 - Drag the left edge to resize
@@ -278,19 +210,6 @@ Explore upstream/downstream dependencies with configurable depth:
 
 Filter nodes by stage, specificity, or type:
 
-**Stage Filters:**
-- ☑ **Reco**: Show reconstruction modules (green)
-- ☑ **Analysis**: Show analysis modules (gray)
-
-**Specific Filters:**
-- ☑ **PAT**: Show/hide PAT modules
-- ☑ **HLT**: Show/hide HLT modules
-
-**Type Filters:**
-- ☑ **Producer**: EDProducer modules
-- ☑ **Filter**: EDFilter modules
-- ☑ **Analyzer**: EDAnalyzer modules
-
 **Quick Actions:**
 - **All**: Select all filters
 - **None**: Deselect all filters
@@ -316,16 +235,6 @@ Press **?** to see the help overlay.
 - Press Enter to open the panel for the selected node
 
 ## Advanced Features
-
-### InputTag Navigation
-
-The tool automatically resolves InputTag references to their producer modules:
-
-- **InputTag format**: `"module:instance:process"` (or shortened forms)
-- **Clickable tags**: Green background = found in graph
-- **Not found tags**: Red background = module not in graph
-- **VInputTag groups**: Multiple inputs displayed as expandable groups
-- **ESInputTag**: Event Setup input tags also supported
 
 ### Navigation History
 
@@ -375,13 +284,6 @@ If you have >5,000 nodes, the initial layout may be slow. Solutions:
 - Use focus radius or dependency explorer for targeted views
 - Consider sampling the input graph for exploration
 
-### InputTags not found
-
-If many InputTags show "not found":
-- The producer module may not be in the `dependency.gv` file
-- The module name may differ between config and DOT file
-- Check the console for warnings during bundle generation
-
 ## Extending the Tool
 
 ### Adding New Filters
@@ -411,13 +313,6 @@ Add export buttons in `index.html` and implement export logic (e.g., to PNG, PDF
 
 ### Input Files (Required)
 
-1. **dependency.gv** - Graphviz DOT file
-   - Format: `digraph` or `graph`
-   - Nodes should have `label` attribute matching config module names
-
-2. **dumpConfig.py** - CMSSW config dump
-   - Generated with: `cmsRun yourconfig.py --dump > dumpConfig.py`
-   - Contains full module definitions with parameters
 
 ### Generated Files
 
@@ -464,7 +359,6 @@ Structure:
 - **Graph size**: Tested with 1,316 nodes and 3,427 edges
 - **Rendering time**: ~2-3 seconds for initial layout
 - **Memory usage**: ~50-100 MB in browser
-- **Supported browsers**: Chrome, Firefox, Safari, Edge (latest versions)
 
 ## License
 
@@ -475,9 +369,7 @@ MIT License - feel free to use, modify, and distribute.
 Contributions welcome! Areas for improvement:
 - Additional layout algorithms
 - Path finding between modules
-- Export to various formats
-- Module execution time overlay
-- Subgraph grouping by CMSSW paths
+- Subgraph grouping 
 - Progressive rendering for larger graphs
 
 ## Support
@@ -490,30 +382,13 @@ For issues or questions:
 
 ---
 
-**Built for CMSSW workflow exploration** | Powered by Cytoscape.js
+## Plan for new features
+### 3D display
+ - color alpha function of energy
+ - interaction point & detector outline
+ - different color for "own" and "children" hits ?
+ 
 
 
 
 
-Summary
-Add a second details panel for a Plotly 3D visualization that updates when the selected Cytoscape node changes. The current app is a plain JavaScript frontend served by server.py, with graph data prebuilt into bundle.json / bundle.js; there is no Dash runtime in this repo today.
-
- start with a client-side Plotly panel, the 3D data can be derived from existing node attributes 
-
-## UI
-The 3D display is can appear or disappear (with a button to show/hide it). Wen shown, it takes the right half of the screen. It should not hide toolbar buttons. It consists of a plotly plot.
-
-## Data for 3D plot
-There will be additional data in the jsons from server to client (can be in same or a different json).
-Each node in the already-existing graph will have two new fields : "directHitsDetIds" (list of IDs) and "directHitsEnergies" (list of energies, same length as directHitsDetIds). 
-An additional data set (independent of the graph) will have a list of "rechits" where each rechit has properties : ID, x, y, z, energy. The x,y,z are used to plot a scatter on the 3D display
-WHen a node in the graph is clicked, the "directHitsDetIds" field is used to select out of the rechits only those that have their ID in the "directHitsDetIds" list.
-For now just ignore the energy.
-
-## Potential plan (guideline, can be updated depending on requirements)
-Add a Plot3DPanelManager beside PanelManager.
-Load Plotly.js in index.html.
-On node selection, call both:
-PanelManager.open(label, nodeId)
-Plot3DPanelManager.updateForNode(nodeId)
-Keep static mode working because all data is already in the browser.

@@ -10,6 +10,7 @@ const UploadManager = {
     dotFileInfo: null,
     rootFileInput: null,
     rootFileInfo: null,
+    rechitsEventIndexInput: null,
     uploadProgress: null,
     uploadStatus: null,
     submitBtn: null,
@@ -24,6 +25,7 @@ const UploadManager = {
         this.dotFileInfo = document.getElementById('dot-file-info');
         this.rootFileInput = document.getElementById('root-file-input');
         this.rootFileInfo = document.getElementById('root-file-info');
+        this.rechitsEventIndexInput = document.getElementById('rechits-event-index-input');
         this.uploadProgress = document.getElementById('upload-progress');
         this.uploadStatus = document.getElementById('upload-status');
         this.submitBtn = document.getElementById('upload-submit-btn');
@@ -94,6 +96,7 @@ const UploadManager = {
         this.form.reset();
         this.dotFileInfo.textContent = 'No file selected';
         this.rootFileInfo.textContent = 'No file selected';
+        this.rechitsEventIndexInput.value = '0';
         this.uploadProgress.classList.add('hidden');
         this.submitBtn.disabled = false;
     },
@@ -117,9 +120,15 @@ const UploadManager = {
     async handleUpload() {
         const dotFile = this.dotFileInput.files[0];
         const rootFile = this.rootFileInput.files[0];
+        const rechitsEventIndex = this.parseRechitsEventIndex();
 
         if (!dotFile) {
             alert('Please select a DOT graph file');
+            return;
+        }
+
+        if (rootFile && rechitsEventIndex === null) {
+            alert('Please enter a non-negative rechits event number');
             return;
         }
 
@@ -134,6 +143,7 @@ const UploadManager = {
             formData.append('dotFile', dotFile);
             if (rootFile) {
                 formData.append('rootFile', rootFile);
+                formData.append('rechitsEventIndex', String(rechitsEventIndex));
             }
 
             // Upload files
@@ -221,5 +231,15 @@ const UploadManager = {
 
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    },
+
+    parseRechitsEventIndex() {
+        const value = this.rechitsEventIndexInput.value.trim();
+        if (value === '') return 0;
+
+        const eventIndex = Number(value);
+        if (!Number.isInteger(eventIndex) || eventIndex < 0) return null;
+
+        return eventIndex;
     }
 };

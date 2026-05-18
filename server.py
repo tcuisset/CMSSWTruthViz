@@ -52,7 +52,7 @@ def set_build_status(**updates):
         BUILD_STATUS.update(updates)
 
 
-def run_uploaded_build(project_root, dot_path, root_path=None):
+def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_index=0):
     """Regenerate uploaded graph and optional rechits data in the background."""
     try:
         set_build_status(
@@ -95,15 +95,17 @@ def run_uploaded_build(project_root, dot_path, root_path=None):
         if root_path is not None:
             set_build_status(
                 state="running",
-                message="Regenerating rechits data...",
+                message=f"Regenerating rechits data from event {rechits_event_index}...",
             )
-            print("\nRegenerating rechits data...")
+            print(f"\nRegenerating rechits data from event {rechits_event_index}...")
             rechits_script = project_root / "preprocess" / "build_rechits_json.py"
             rechits_args = [
                 sys.executable,
                 str(rechits_script),
                 str(root_path),
                 str(project_root / "data" / "rechits.json"),
+                "--event-index",
+                str(rechits_event_index),
             ]
 
             result = subprocess.run(
@@ -203,6 +205,11 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Get uploaded files
             dot_item = self.get_upload_item(form, 'dotFile')
             root_item = self.get_upload_item(form, 'rootFile')
+            try:
+                rechits_event_index = self.get_non_negative_int_field(form, 'rechitsEventIndex', 0)
+            except ValueError as exc:
+                self.send_json_response({'success': False, 'error': str(exc)}, 400)
+                return
 
             if dot_item is None:
                 self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
@@ -231,6 +238,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 with open(root_path, 'wb') as f:
                     f.write(root_item.file.read())
                 print(f"  Saved: {root_path}")
+                print(f"  Rechits event index: {rechits_event_index}")
 
             set_build_status(
                 state="queued",
@@ -240,7 +248,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             )
             thread = threading.Thread(
                 target=run_uploaded_build,
-                args=(project_root, dot_path, root_path),
+                args=(project_root, dot_path, root_path, rechits_event_index),
                 daemon=True,
             )
             thread.start()
@@ -271,6 +279,29 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             return None
 
         return item
+
+    def get_non_negative_int_field(self, form, key, default):
+        """Return a non-negative integer form field value."""
+        if key not in form:
+            return default
+
+        item = form[key]
+        if isinstance(item, list):
+            item = item[0] if item else None
+
+        value = getattr(item, 'value', default)
+        if value in (None, ""):
+            return default
+
+        try:
+            int_value = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} must be a non-negative integer") from exc
+
+        if int_value < 0:
+            raise ValueError(f"{key} must be a non-negative integer")
+
+        return int_value
 
     def send_json_response(self, data, status=200):
         """Send JSON response"""
