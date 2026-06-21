@@ -80,39 +80,6 @@ chmod +x run.sh
 ./run.sh
 ```
 
----
-
-### macOS
-
-**1. Install Homebrew** (if not already installed):
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-**2. Install dependencies:**
-
-```bash
-# Install Python 3 and graphviz
-brew install python3 graphviz
-```
-
-**3. Verify installation:**
-
-```bash
-python3 --version
-pip3 --version
-dot -V
-```
-
-**4. Run the application:**
-
-```bash
-cd CMSSWGraph
-chmod +x run.sh
-./run.sh
-```
-
 
 ## Troubleshooting Installation
 

@@ -18,7 +18,7 @@ Important entry points:
 
 ## Data Pipeline
 
-The source graph is a Graphviz DOT file such as `truthgraph.dot`, `truthlogicalgraph.dot`, or `dependency.gv`.
+The source graph is a Graphviz DOT file such as `truthgraph.dot`, `truthlogicalgraph.dot`
 
 `preprocess/build_bundle.py` calls `parse_graph.parse_dot_file()` and writes `data/bundle.json` with this shape:
 

@@ -127633,7 +127633,7 @@
     }
   ],
   "metadata": {
-    "source": "../truth-hits-v2/nano_out.root",
+    "source": "/home/cuisset/hgcal/truth-interactive-website/CMSSWGraphViz/rechits.root",
     "tree": "Events",
     "event_index": 0,
     "rechit_count": 18233,
