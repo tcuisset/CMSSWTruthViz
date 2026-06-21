@@ -1,8 +1,8 @@
 # OpenShift S2I Deployment
 
-This repository can be deployed directly with the OpenShift Python S2I builder.
+This repository can be deployed with the OpenShift Python S2I builder. More general setup notes are in [INSTALL.md](INSTALL.md).
 
-Use the repository root, not the parent directory:
+Create the app from the `CMSSWGraphViz` repository root:
 
 ```bash
 oc new-app python:3.11~https://github.com/waredjeb/CMSSWGraphViz.git
@@ -14,14 +14,16 @@ The S2I build installs `requirements.txt`. At runtime `.s2i/bin/run` starts:
 python server.py --host 0.0.0.0 --start-port ${PORT:-8080} --no-auto-find-port
 ```
 
-The generated graph bundle is not committed. On first startup the server:
+On startup, `server.py`:
 
 - uses `data/bundle.json` if it exists,
-- generates it from `truthgraph.dot` or `dependency.gv` if either file is present,
-- otherwise creates an empty bundle so the app can start and accept uploads.
+- generates `data/bundle.json` from `truthgraph.dot` or `dependency.gv` if either file is present,
+- otherwise creates an empty bundle so the web UI can start and accept DOT uploads.
 
-After creating the app, expose the service if needed:
+Expose the service if needed:
 
 ```bash
 oc expose service/cmsswgraphviz
 ```
+
+The browser still needs access to the CDN-hosted frontend libraries listed in [FRONTEND.md](FRONTEND.md), unless those assets are vendored into `app/index.html`.

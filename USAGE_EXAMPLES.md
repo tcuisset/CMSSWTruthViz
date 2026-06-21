@@ -1,271 +1,147 @@
 # Usage Examples
 
-Common workflows and examples for using the CMSSW Graph Visualization tool.
+Common workflows for exploring CMSSW simulation truth graphs.
 
-## Table of Contents
+## Find A Particle Or Vertex
 
-- [Quick Tasks](#quick-tasks)
-- [Investigation Workflows](#investigation-workflows)
-- [Advanced Scenarios](#advanced-scenarios)
+Use basic search when you know a visible label, node ID, PDG ID, or text from the DOT label.
 
----
+Examples:
 
-## Quick Tasks
+```text
+mu
+pi+
+n123
+SimVertex
+```
 
-### Find a Specific Module
+Steps:
 
-**Task:** Locate "hgcalMergeLayerClusters" in the graph
+1. Type the query in **Search**.
+2. Press Enter or click **Find**.
+3. Use previous/next controls when there are multiple matches.
+4. Click a result or press Enter to open the side panel.
 
-**Steps:**
-1. Type `hgcalMergeLayerClusters` in the Search field
-2. Press Enter
-3. Graph zooms to the module and opens its details panel
+## Search By DOT Attribute
 
-**Result:** You can now see its type, parameters, and InputTags
+Use **Advanced** search for attribute-level questions.
 
----
+Examples:
 
-### Find All Dependencies
+```text
+pid==211
+status==1
+hasGen AND hasSim
+crossedBoundary
+particleName contains mu
+energy>10
+```
 
-**Task:** Show complete dependency tree for a module (depth 3)
+Advanced search is AND-only. Separate criteria with new lines, semicolons, `AND`, or `&&`.
 
-**Steps:**
-1. Click on your module of interest
-2. Set **Depth** to `3`
-3. Click **Show Dependencies**
+## Inspect A Node
 
-**Result:** Graph shows all modules within 3 steps upstream or downstream
+Steps:
 
----
+1. Click a node.
+2. Read the summary fields in the side panel.
+3. Check **Ancestors** and **Descendants**.
+4. Open **Rendered DOT Label** when the original DOT label contains useful formatted text.
+5. Use **DOT Attributes** for the raw copied attributes.
 
-## Investigation Workflows
+The breadcrumb bar records recent node navigation.
 
-### Workflow 2: Find Who Uses a Module's Output
+## Reduce Visual Clutter
 
-**Scenario:** You modified a module and need to know what will be affected
+Start with the built-in filters:
 
-**Example:** Find all consumers of "hgcalLayerClustersEE"
+1. Hide GenEvent nodes.
+2. Hide `SimVertex key=0`.
+3. Hide small disconnected subgraphs.
+4. Hide parton shower when status-2 gluon detail is not relevant.
 
-**Steps:**
+Then apply one of:
 
-1. **Find the producer:**
-   ```
-   Search: "hgcalLayerClustersEE"
-   ```
+- Focus radius for local undirected context.
+- Upstream/downstream link filtering for directed context.
+- Advanced search to highlight nodes with matching attributes.
 
-2. **Show downstream dependencies:**
-   - Depth: `3` (or higher)
-   - Click **Downstream Only**
+## Explore Local Truth Context
 
-3. **Review consumers:**
-   - Each visible node depends on this module (directly or indirectly)
-   - Click nodes to see how they use it (check their InputTags)
+Use focus radius to understand the immediate neighborhood around a node.
 
-4. **Result:**
-   - List of all affected modules
-   - Understanding of impact radius
+Steps:
 
----
+1. Select a node.
+2. Set **Focus Radius** to `1`.
+3. Click the apply checkmark.
+4. Increase to `2` or `3` only if more context is needed.
+5. Click **Reset View** to restore the full graph.
 
-### Workflow 4: Explore Module Neighborhood
+This is useful when the full graph layout is too dense to inspect directly.
 
-**Scenario:** You want to see only the immediate context around a module
+## Trace Directed Links
 
-**Example:** Explore local dependencies of "siPixelClusters"
+Use the **Links** controls to follow graph direction around a selected node.
 
-**Steps:**
+Steps:
 
-1. **Select the module:**
-   ```
-   Search: "siPixelClusters"
-   Press Enter
-   ```
+1. Select a node.
+2. Set **Depth**.
+3. Choose **Upstream**, **Downstream**, or **Both**.
+4. Click the apply checkmark.
 
-2. **Apply focus radius:**
-   - Focus Radius: `1`
-   - Click **Apply**
+The graph direction is the direction encoded in the DOT file. In this app, upstream/downstream names follow the truth-graph convention implemented by the frontend.
 
-3. **Examine neighbors:**
-   - Graph shows only direct neighbors (1 hop away)
-   - These are immediate inputs and outputs
+## View Rechits For A Node
 
-4. **Expand context if needed:**
-   - Focus Radius: `2`
-   - Click **Apply**
+When rechit data is loaded:
 
-5. **Result:**
-   - Clean view of local context without noise
-   - Easy to understand immediate dependencies
+1. Select **Direct hits** in the 3D display mode.
+2. Click a node with `directHitsDetIds`.
+3. Use Plotly controls to rotate, zoom, or pan.
 
----
+For aggregate context:
 
-## Advanced Scenarios
+1. Select **Subgraph hits**.
+2. Click a node.
+3. The panel collects direct hits from the selected node and descendants.
 
-### Scenario 1: Find Shared Dependencies
+If no real rechit data is loaded, the app displays placeholder points for UI testing.
 
-**Task:** Find modules that both ModuleA and ModuleB depend on
+## Upload New Input Files
 
-**Steps:**
+Server mode only:
 
-1. **Explore ModuleA upstream:**
-   - Select ModuleA
-   - Depth: `5`
-   - Click **Upstream Only**
-   - Note visible modules
+1. Start the app with `./run.sh` or `python server.py`.
+2. Click **Upload Files**.
+3. Select a DOT file.
+4. Optionally select a ROOT file and event index.
+5. Click **Upload & Process**.
 
-2. **Explore ModuleB upstream:**
-   - Search for ModuleB
-   - Depth: `5`
-   - Click **Upstream Only**
-   - Note visible modules
+The server rebuilds graph and optional rechit JSON in the background. The page reloads after a successful build.
 
-3. **Find intersection:**
-   - Common visible modules are shared dependencies
-   - Click through to verify
+## Export The Current View
 
-**Note:** This is manual for now. Future enhancement could highlight shared dependencies automatically.
+After filtering or zooming:
 
----
+- Click **Save PNG** for an image.
+- Click **Save PDF** for a one-page PDF.
 
-### Scenario 3: Keyboard-Based Exploration
+Exports capture the current Cytoscape viewport. Fit or zoom the graph before exporting.
 
-**Task:** Browse the graph without using the mouse
+## Console Helpers
 
-**Steps:**
+Open browser DevTools to inspect visible nodes:
 
-1. **Start navigation:**
-   - Press **Tab** to select first node
+```javascript
+GraphManager.cy.nodes().filter(node => node.visible()).map(node => node.data())
+```
 
-2. **Move around:**
-   - Use **↑↓←→** to navigate spatially
-   - Or **Tab** to cycle through nodes
+List currently non-hidden node labels:
 
-3. **Inspect modules:**
-   - Press **Enter** to open panel
-   - Read the details
-
-4. **Follow InputTags:**
-   - (Switch to mouse to click InputTag)
-   - Or use breadcrumbs with keyboard
-
-5. **Close and continue:**
-   - Press **Esc** to close panel
-   - Continue with arrow keys
-
-**Result:** Hands-free graph exploration (mostly)
-
----
-
-### Scenario 4: Export Subgraph (Manual)
-
-**Task:** Get a list of modules in a dependency tree for documentation
-
-**Steps:**
-
-1. **Show dependency tree:**
-   - Select root module
-   - Set depth as needed
-   - Click **Show Dependencies**
-
-2. **Manually list modules:**
-   - Click through visible nodes
-   - Copy module names from panel headers
-
-3. **Alternative - Browser Console:**
-   - Open browser DevTools (F12)
-   - Run in console:
-     ```javascript
-     GraphManager.cy.nodes().filter(n => !n.hasClass('hidden')).map(n => n.data('label'))
-     ```
-   - Copy the array output
-
-**Result:** List of module names in the subgraph
-
-**Note:** Future enhancement could add an "Export" button.
-
----
-
-## Common Patterns
-
-## Tips for Large Graphs
-
-### Reducing Visual Clutter
-
-1. **Start with filters:**
-   - Uncheck categories you don't care about
-   - Gradually enable as needed
-
-2. **Use focus radius:**
-   - Start with radius 1-2
-   - Expand only if needed
-
-3. **Search first:**
-   - Find your target module
-   - Then use dependency explorer
-
-### Improving Performance
-
-1. **Limit visible nodes:**
-   - Use filters aggressively
-   - <500 visible nodes is smooth
-   - 500-1000 is acceptable
-   - >1000 may lag on pan/zoom
-
-2. **Reset when confused:**
-   - Press **R** to reset view
-   - Start over with fresh filters
-
-3. **Close panel when not needed:**
-   - Panel rendering adds overhead
-   - Press **Esc** when done reading
-
----
-
-## Troubleshooting Investigations
-
-### Issue: "No dependencies shown"
-
-**Problem:** Dependency explorer shows only selected module
-
-**Possible causes:**
-1. Module is isolated (no connections)
-2. Depth is too small
-3. Edges were filtered during preprocessing
-
-**How to investigate:**
-- Increase depth to 10
-- Try "Both" instead of upstream/downstream
-- Check panel to see if InputTags are listed
-
----
-
-### Issue: "Search finds nothing"
-
-**Problem:** Search returns "No modules found"
-
-**Possible causes:**
-1. Typo in search term
-2. Module not in the graph
-3. Case sensitivity issue (shouldn't happen)
-
-**How to investigate:**
-- Search for partial name (e.g., "pixel" instead of "siPixelClusters")
-- Check module list in bundle.json
-- Try browsing visually with keyboard navigation
-
----
-
-## Best Practices
-
-1. **Always start broad:** Load full graph, then filter down
-2. **Use breadcrumbs:** They're there for a reason - backtrack easily
-3. **Combine features:** Search + Dependency Explorer is powerful
-4. **Document your findings:** Copy module names, take screenshots
-5. **Reset frequently:** Don't get lost in filters, press R to start fresh
-6. **Keyboard shortcuts:** Learn them, they're much faster
-
----
-
-**For full feature reference, see [FEATURES.md](FEATURES.md)**
-
-**For setup and installation, see [README.md](README.md)**
+```javascript
+GraphManager.cy.nodes()
+  .filter(node => !node.hasClass('hidden'))
+  .map(node => node.data('label'))
+```

@@ -1,234 +1,136 @@
 # Features Reference
 
-Quick reference guide for all features in the CMSSW Graph Visualization tool.
+This is the user-facing feature reference for the Truth Graph Viewer.
 
-## Table of Contents
+## Graph Display
 
-- [Graph Visualization](#graph-visualization)
-- [node Details Panel](#node-details-panel)
-- [Search & Navigation](#search--navigation)
-- [Focus & Filtering](#focus--filtering)
-- [Dependency Analysis](#dependency-analysis)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
+- Cytoscape.js rendering of DOT-derived truth graphs.
+- Directed edges from the input DOT graph.
+- Legend entries for Gen, Sim, and combined Gen+Sim node categories.
+- Compact labels generated from particle IDs, vertex keys, or fallback node IDs.
+- Side-panel access to the original DOT attributes.
 
----
+Visual encodings include:
 
-## Graph Visualization
+- Distinct colors and shapes for event, vertex, particle, and track-like nodes.
+- Special styling for combined Gen+Sim nodes.
+- Marker styling for `crossedBoundary=true`.
+- Optional hiding of selected graph categories.
 
-### Visual Encoding
-**Node Colors:**
-**Node Shapes:**
-**Node Size:**
-**Edge Style:**
-- Directed arrows showing dependency flow
+## Layouts
 
-### Interaction
+Use the layout selector in the header:
 
-| Action | Gesture |
-|--------|---------|
-| **Pan graph** | Click + drag on background |
-| **Zoom** | Mouse wheel / pinch |
-| **Select node** | Click on node |
-| **View details** | Click opens side panel |
-| **Hover tooltip** | Mouse over node (if available) |
+- Dagre: hierarchical layout, default.
+- fCoSE: force-directed layout.
+- ELK: layered layout with orthogonal routing.
 
-### Layout
+The layout status indicator appears while a layout is running. Use **Cancel** to stop a long layout when supported by the layout engine.
 
-- **Dagre**: hierarchical layout, similar to Graphviz `dot`
-- **fCoSE**: force-directed layout for compact clustered views
-- **ELK**: layered rightward layout with orthogonal edge routing
-- **Runtime switch**: use the Layout selector in the header
-- **Layout status**: running layouts show a status pill with a cancel button
+## Search
 
----
+Basic search matches node IDs and label fields:
 
-## node Details Panel
+- `label`
+- `displayLabel`
+- `detailLabel`
+- `rawLabel`
 
-### Display Sections
+Advanced search matches node attributes. Examples:
 
-
-### Panel Interactions
-
-**Resize:**
-- Drag the left edge to adjust width
-- Min width: 300px
-- Max width: 80% of viewport
-- Width saved to localStorage
-
-**Navigate:**
-- Click any node to jump to that node
-- Breadcrumbs show navigation history
-- Click breadcrumb to go back
-
-**Close:**
-- Click × button in header
-- Press **Esc** key
-- Click graph background
-
----
-
-## Search & Navigation
-
-### Search node
-
-**Location:** Top controls bar
-
-**Usage:**
-1. Type node/label (partial match, case-insensitive)
-2. Press **Enter** or click **Find**
-
-**Results:**
-- **Single match**: Opens panel, zooms to node
-- **Multiple matches**: Highlights all, dims others
-- **No matches**: Alert dialog
-
-**Clear:**
-- Click **Clear** button
-- Resets all highlights
-- Fits full graph to view
-
-### Breadcrumb Navigation
-
-**Location:** Side panel header
-
-**Display:** `nodeA › nodeB › nodeC`
-
-**Interaction:**
-- Current node: Plain text (not clickable)
-- Previous nodes: Blue, clickable
-- Click any to jump back in history
-
----
-
-## Focus & Filtering
-
-### Focus Radius (Ego Graph)
-
-**Purpose:** Show N-hop neighborhood around selected node
-
-**Controls:**
-- **Focus Radius**: 1-5 hops (number input)
-- **Apply**: Show neighborhood
-- **Reset View**: Restore full graph
-
-**Algorithm:** BFS (Breadth-First Search) undirected
-
-**Behavior:**
-- Hides nodes outside N-hop radius
-- Hides edges with hidden endpoints
-- Fits view to visible nodes
-
-**Example:**
-- Radius 1: Show only direct neighbors
-- Radius 2: Show neighbors + neighbors of neighbors
-
-### Category Filters
-
-**Location:** Filter controls wrapper (blue background)
-
-**Stats Display:** Shows "Showing X of Y nodes (Z%)"
-
----
-
-## Dependency Analysis
-
-### Dependency Explorer
-
-**Purpose:** Trace upstream/downstream dependencies with configurable depth
-
-**Controls:**
-- **Selected node**: Display current node name
-- **Depth**: 1-10 levels (number input)
-- **Show Dependencies**: Both upstream and downstream
-- **Upstream Only**: nodes this depends on (predecessors)
-- **Downstream Only**: nodes that depend on this (successors)
-
-**Requirements:**
-- Must select a node first (click to open panel)
-
-**Behavior:**
-- BFS traversal up to specified depth
-- Hides nodes outside dependency tree
-- Highlights selected node (red border)
-- Fits view to dependency tree
-
-**Use Cases:**
-- **Upstream**: "What does this node need to run?"
-- **Downstream**: "What depends on this node's output?"
-- **Both**: "What's the full context around this node?"
-
-**Example:**
-```
-Depth 1 Upstream:
-  nodeA ← nodeB ← [nodeC]
-         (selected)
-
-Depth 2 Downstream:
-  [nodeC] → nodeD → nodeE
-  (selected)     ↓
-              nodeF
+```text
+pid==211
+hasGen AND hasSim
+crossedBoundary
+particleName contains mu
+energy>50
 ```
 
----
+Multiple results can be stepped through with the previous/next controls.
+
+## Side Panel
+
+Click a node to open the side panel. It shows:
+
+- Node ID, particle name, PDG ID, energy, and momentum-like fields when available.
+- Ancestors and descendants.
+- Rendered DOT label.
+- All copied DOT attributes.
+- Breadcrumb navigation history.
+
+The panel is resizable and stores width in `localStorage`.
+
+## Focus Radius
+
+Focus radius shows the undirected N-hop neighborhood around the selected node.
+
+Typical use:
+
+1. Select a node.
+2. Choose a radius from 1 to 5.
+3. Click the apply checkmark.
+4. Use **Reset View** to return to the full graph.
+
+## Link Filtering
+
+The link controls show directed context around the selected node:
+
+- **Upstream**: source-side traversal according to the app's truth-graph convention.
+- **Downstream**: target-side traversal according to the app's truth-graph convention.
+- **Both**: combined directed context.
+- **None**: clears the link filter.
+
+Depth controls how many link steps are followed.
+
+## Default Visibility Filters
+
+Header checkboxes can hide:
+
+- GenEvent nodes.
+- `SimVertex` nodes with `key=0`.
+- Parton-shower status-2 gluons, while preserving continuity with bypass edges.
+- Disconnected components with fewer than 10 nodes.
+
+## 3D Rechit View
+
+The 3D display mode can be:
+
+- **Hide**
+- **Direct hits**
+- **Subgraph hits**
+
+Direct hits use `directHitsDetIds` on the selected node. Subgraph hits collect direct hits from the selected node and descendants. Coordinates come from `data/rechits.json` in server mode or `app/js/rechits.js` in static mode.
+
+## Export
+
+The header provides:
+
+- **Save PNG**
+- **Save PDF**
+
+Both export the current Cytoscape viewport, not the entire unbounded graph.
+
+## Upload
+
+In server mode, **Upload Files** accepts:
+
+- a required DOT file
+- an optional ROOT rechits file
+- a rechits event index
+
+The server rebuilds the JSON bundle in the background and the page reloads when processing finishes.
+
+Upload is hidden in static `file://` mode.
 
 ## Keyboard Shortcuts
 
-Press **?** to toggle help overlay.
+Press `?` in the app to show help.
 
-### Navigation Keys
-
-| Key | Action | Details |
-|-----|--------|---------|
-| **↑** | Navigate up | Move to nearest node above |
-| **↓** | Navigate down | Move to nearest node below |
-| **←** | Navigate left | Move to nearest node left |
-| **→** | Navigate right | Move to nearest node right |
-| **Tab** | Cycle next | Move to next visible node |
-| **Enter** | Open panel | Show details for selected node |
-
-### Control Keys
-
-| Key | Action | Details |
-|-----|--------|---------|
-| **Esc** | Close panel | Close side panel, clear highlights |
-| **R** | Reset view | Show all nodes, fit to screen |
-| **?** | Toggle help | Show/hide keyboard shortcuts |
-
-### Visual Feedback
-
-- **Selected node**: Orange border (`#f39c12`)
-- **Highlighted node**: Red border (`#e74c3c`)
-- **Dimmed node**: 30% opacity
-
-### Notes
-
-- Shortcuts disabled when typing in input fields
-- Arrow keys navigate spatially (geometric direction)
-- Tab cycles through nodes in array order
-- Selection persists until cleared (Esc or R)
-
----
-
-## Tips & Tricks
-
-### Efficient Workflow
-
-### Performance Optimization
-
-- **Large graphs**: Use filters early to reduce visible nodes
-- **Slow layout**: Wait for initial layout to complete before interacting
-- **Memory**: Close unused browser tabs if graph is very large
-
-### Customization
-
-- **Panel width**: Resize once, it's saved automatically
-- **Layout**: Use the header selector to switch between Dagre and fCoSE
-- **Colors**: Edit `style.css` to change color scheme
-
----
-
-## Data Coverage
-
----
-
-**For full documentation, see [README.md](README.md)**
+| Key | Action |
+| --- | --- |
+| Arrow keys | Move to the nearest node in that direction |
+| Tab | Cycle through visible nodes |
+| Enter | Open selected node details |
+| Esc | Close panel and clear selection |
+| R | Reset view |
+| ? | Toggle help |
