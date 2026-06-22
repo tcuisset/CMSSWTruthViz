@@ -6,6 +6,16 @@ if [ -d "${APP_ROOT:-/opt/app-root}/src" ]; then
 fi
 APP_SRC="$(pwd)"
 
+if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
+    for candidate in "$APP_SRC"/CMSSW_*/src; do
+        if [ -d "$candidate/PhysicsTools/TruthInfo/test" ]; then
+            export TRUTHVIZ_CMSSW_SRC="$candidate"
+            echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+            break
+        fi
+    done
+fi
+
 PYTHON_BIN="${PYTHON_BIN:-python}"
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     PYTHON_BIN="python3"

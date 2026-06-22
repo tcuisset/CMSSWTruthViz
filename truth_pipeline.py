@@ -24,7 +24,8 @@ from urllib.request import urlretrieve
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_CMSSW_SRC = PROJECT_ROOT.parent / "CMSSW_20_1_X_2026-06-20-1100" / "src"
+DEFAULT_CMSSW_RELEASE = "CMSSW_20_1_X_2026-06-20-1100"
+DEFAULT_CMSSW_SRC = PROJECT_ROOT.parent / DEFAULT_CMSSW_RELEASE / "src"
 
 
 class PipelineError(RuntimeError):
@@ -84,6 +85,10 @@ def resolve_cmssw_src(explicit: str | Path | None = None) -> Path:
     cmssw_base = os.environ.get("CMSSW_BASE")
     if cmssw_base:
         return Path(cmssw_base).expanduser().resolve() / "src"
+
+    app_local_src = PROJECT_ROOT / DEFAULT_CMSSW_RELEASE / "src"
+    if app_local_src.exists():
+        return app_local_src.resolve()
 
     return DEFAULT_CMSSW_SRC.resolve()
 

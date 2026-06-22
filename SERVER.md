@@ -221,6 +221,10 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
 In OpenShift S2I, the app can run in a Python container without direct `cmsRun`.
 Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and sets
 `TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` automatically when needed.
+The S2I build hook `.s2i/bin/assemble` creates the CMSSW area by sourcing the CMS
+environment and running `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh`
+in the app source directory. Override with `TRUTHVIZ_CMSSW_INSTALL_SCRIPT`, or
+set `TRUTHVIZ_SKIP_CMSSW_INSTALL=1` when CMSSW is provided another way.
 
 Local CLI:
 

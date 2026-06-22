@@ -11,16 +11,23 @@ Create the app from the `CMSSWGraphViz` repository root:
 oc new-app python:3.11~https://github.com/waredjeb/CMSSWGraphViz.git
 ```
 
-The S2I build installs `requirements.txt`. For `/process-root` and catalogue
-samples, the runtime environment must provide:
+The S2I build installs `requirements.txt`, then `.s2i/bin/assemble` sources the
+CMS environment and runs:
 
-- `/cvmfs/cms.cern.ch` mounted in the running pod,
-- a CMSSW checkout or mounted CMSSW area containing the `PhysicsTools/TruthInfo`
-  dumper config and built plugins,
+```bash
+/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
+```
+
+The install script creates the CMSSW area in the app source directory inside the
+image. For `/process-root` and catalogue samples, the build/runtime environment
+must provide:
+
+- `/cvmfs/cms.cern.ch` mounted during the S2I build,
+- `/cvmfs/cms.cern.ch` mounted in the running pod so `cmssw-el9` is available,
 - a writable persistent volume for `TRUTHVIZ_JOB_ROOT`.
 
-Set one of these to point at the CMSSW `src` directory used inside the
-`cmssw-el9` container:
+At runtime, `.s2i/bin/run` auto-detects the built `CMSSW_*/src` directory. You
+can override it with:
 
 ```bash
 TRUTHVIZ_CMSSW_SRC=/path/to/CMSSW/src
@@ -57,6 +64,13 @@ TRUTHVIZ_CATALOG=/opt/app-root/src/samples/catalog.json
 TRUTHVIZ_MAX_UPLOAD_MB=2048
 TRUTHVIZ_CMSRUN_TIMEOUT_SEC=3600
 CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh
+```
+
+Useful build-time configuration:
+
+```bash
+TRUTHVIZ_CMSSW_INSTALL_SCRIPT=/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
+TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only for builds that provide CMSSW another way
 ```
 
 Expose the service if needed:
