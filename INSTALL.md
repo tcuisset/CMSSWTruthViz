@@ -135,6 +135,18 @@ The S2I build installs `requirements.txt`. At runtime `.s2i/bin/run` executes:
 python server.py --host 0.0.0.0 --start-port ${PORT:-8080} --no-auto-find-port
 ```
 
+For CMSSW ROOT processing, the S2I container may run without direct `cmsRun`.
+It must have `/cvmfs/cms.cern.ch` mounted. The entrypoint sources:
+
+```bash
+export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+```
+
+and defaults `TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` when direct `cmsRun` is not
+available. Set `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` to the CMSSW checkout that
+contains the TruthInfo dumper config and built plugins.
+
 Expose the service if needed:
 
 ```bash

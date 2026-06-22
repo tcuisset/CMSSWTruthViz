@@ -11,27 +11,38 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     PYTHON_BIN="python3"
 fi
 
-if [ -n "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
-    if [ ! -d "$TRUTHVIZ_CMSSW_SRC" ]; then
-        echo "ERROR: TRUTHVIZ_CMSSW_SRC does not exist: $TRUTHVIZ_CMSSW_SRC" >&2
+CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ] && ! command -v cmsRun >/dev/null 2>&1; then
+    if [ ! -r "$CMSSET_DEFAULT" ]; then
+        echo "ERROR: cmsRun is not available and CMS bootstrap was not found: $CMSSET_DEFAULT" >&2
+        echo "Mount /cvmfs or set TRUTHVIZ_CMSRUN_WRAPPER to a cmsRun wrapper command." >&2
         exit 1
     fi
-    cd "$TRUTHVIZ_CMSSW_SRC"
-    if ! CMSSW_ENV="$(scram runtime -sh)" || ! eval "$CMSSW_ENV" >/dev/null 2>&1; then
-        echo "ERROR: could not initialize CMSSW runtime with scram runtime -sh in $TRUTHVIZ_CMSSW_SRC" >&2
+
+    export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+    # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
+    source "$CMSSET_DEFAULT"
+
+    if ! command -v cmssw-el9 >/dev/null 2>&1; then
+        echo "ERROR: cmsRun is not available and cmssw-el9 was not found after sourcing $CMSSET_DEFAULT" >&2
         exit 1
     fi
-    cd "$APP_SRC"
-elif [ -n "${CMSSW_BASE:-}" ]; then
-    cd "$CMSSW_BASE/src"
-    if ! CMSSW_ENV="$(scram runtime -sh)" || ! eval "$CMSSW_ENV" >/dev/null 2>&1; then
-        echo "ERROR: could not initialize CMSSW runtime with scram runtime -sh in $CMSSW_BASE/src" >&2
-        exit 1
+
+    export TRUTHVIZ_CMSRUN_WRAPPER="cmssw-el9"
+    echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for cmsRun jobs"
+elif [ -n "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
+    read -r WRAPPER_CMD _ <<< "$TRUTHVIZ_CMSRUN_WRAPPER"
+    if ! command -v "$WRAPPER_CMD" >/dev/null 2>&1; then
+        if [ -r "$CMSSET_DEFAULT" ]; then
+            export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+            # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
+            source "$CMSSET_DEFAULT"
+        fi
+        if ! command -v "$WRAPPER_CMD" >/dev/null 2>&1; then
+            echo "ERROR: TRUTHVIZ_CMSRUN_WRAPPER command is not available: $WRAPPER_CMD" >&2
+            exit 1
+        fi
     fi
-    cd "$APP_SRC"
-elif ! command -v cmsRun >/dev/null 2>&1; then
-    echo "ERROR: cmsRun is not available. Run this app in a CMSSW-capable image or set TRUTHVIZ_CMSSW_SRC/CMSSW_BASE." >&2
-    exit 1
 fi
 
 exec "$PYTHON_BIN" server.py \

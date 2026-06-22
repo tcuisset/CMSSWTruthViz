@@ -215,6 +215,12 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
 - `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: cmsRun timeout, default `3600`.
 - `TRUTHVIZ_CMSRUN_WRAPPER`: optional wrapper for only the `cmsRun` step,
   for example `cmssw-el9` on non-EL9 hosts.
+- `CMSSET_DEFAULT`: CMS bootstrap script used by S2I when direct `cmsRun` is not
+  available, default `/cvmfs/cms.cern.ch/cmsset_default.sh`.
+
+In OpenShift S2I, the app can run in a Python container without direct `cmsRun`.
+Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and sets
+`TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` automatically when needed.
 
 Local CLI:
 
