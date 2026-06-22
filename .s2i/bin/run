@@ -123,6 +123,9 @@ elif [ -n "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
     fi
 fi
 
+# the following forces the SITECONF to be the CERN site config, because in OKD4 the CVMFS mount does not have the client config variable CMS_LOCAL_SITE set, which causes cmsRun to fail
+export SITECONFIG_PATH=/cvmfs/cms.cern.ch/SITECONF/T2_CH_CERN/
+
 exec "$PYTHON_BIN" server.py \
     --host "${HOST:-0.0.0.0}" \
     --start-port "${PORT:-8080}" \
