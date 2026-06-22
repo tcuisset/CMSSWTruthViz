@@ -988,11 +988,23 @@ body {
     margin-bottom: 20px;
 }
 
+.form-group.hidden {
+    display: none;
+}
+
 .form-group label {
     display: block;
     font-weight: 600;
     margin-bottom: 8px;
     color: #2c3e50;
+}
+
+.form-group .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 14px;
+    font-weight: 500;
 }
 
 .form-group input[type="file"] {
@@ -1011,14 +1023,19 @@ body {
     background: #e8f4f8;
 }
 
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.form-group input[type="text"],
+.form-group select {
     display: block;
     width: 100%;
-    max-width: 160px;
     padding: 10px;
     border: 1px solid #bdc3c7;
     border-radius: 4px;
     font-size: 14px;
+}
+
+.form-group input[type="number"] {
+    max-width: 160px;
 }
 
 .file-info {

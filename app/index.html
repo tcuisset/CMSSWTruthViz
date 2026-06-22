@@ -219,11 +219,39 @@
                 <button id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Upload a DOT graph and, optionally, a ROOT file with rechits.</p>
+                <p>Upload prepared viewer inputs, process a CMSSW EDM ROOT file, or run a configured sample.</p>
                 <form id="upload-form">
                     <div class="form-group">
+                        <label>Input mode:</label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="input-mode" value="cmssw" checked>
+                            CMSSW ROOT
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="input-mode" value="prepared">
+                            Prepared DOT/ROOT
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="input-mode" value="sample">
+                            Sample catalogue
+                        </label>
+                    </div>
+                    <div class="form-group cmssw-input-group">
+                        <label for="cmssw-root-file-input">CMSSW EDM ROOT file:</label>
+                        <input type="file" id="cmssw-root-file-input" accept=".root">
+                        <span class="file-info" id="cmssw-root-file-info">No file selected</span>
+                    </div>
+                    <div class="form-group cmssw-input-group">
+                        <label for="event-index-input">Event number:</label>
+                        <input type="number" id="event-index-input" min="0" step="1" value="0">
+                    </div>
+                    <div class="form-group cmssw-input-group">
+                        <label for="dumper-args-input">Extra dumper arguments:</label>
+                        <input type="text" id="dumper-args-input" placeholder="e.g. --no-keepSpectators -s 23">
+                    </div>
+                    <div class="form-group">
                         <label for="dot-file-input">Graph (truthgraph.dot):</label>
-                        <input type="file" id="dot-file-input" accept=".gv,.dot" required>
+                        <input type="file" id="dot-file-input" accept=".gv,.dot">
                         <span class="file-info" id="dot-file-info">No file selected</span>
                     </div>
                     <div class="form-group">
@@ -234,6 +262,13 @@
                     <div class="form-group">
                         <label for="rechits-event-index-input">Rechits event number:</label>
                         <input type="number" id="rechits-event-index-input" min="0" step="1" value="0">
+                    </div>
+                    <div class="form-group sample-input-group">
+                        <label for="sample-select">Sample:</label>
+                        <select id="sample-select">
+                            <option value="">Loading samples...</option>
+                        </select>
+                        <span class="file-info" id="sample-info"></span>
                     </div>
                     <div class="form-actions">
                         <button type="submit" id="upload-submit-btn">Upload & Process</button>

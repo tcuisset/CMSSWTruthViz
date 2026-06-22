@@ -13,6 +13,8 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 - Exports the current Cytoscape viewport as PNG or PDF.
 - Runs either as a static HTML page with embedded JSON or through the local Python server.
 - In server mode, accepts upload of a DOT graph and optional ROOT rechits file.
+- In CMSSW-capable server mode, accepts a CMSSW EDM ROOT file and runs the
+  TruthInfo dumper/conversion pipeline automatically.
 
 ## Documentation Map
 
@@ -55,6 +57,16 @@ http://localhost:8009/app/
 
 If that port is busy, `server.py` tries subsequent ports.
 
+To generate viewer inputs directly from a CMSSW EDM ROOT file:
+
+```bash
+./visualizeTruthGraph myInputFile.root --event-index 0
+```
+
+This requires a CMSSW runtime with the TruthInfo plugins available. The script
+uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, or the sibling
+`CMSSW_20_1_X_2026-06-20-1100/src` checkout.
+
 ## Static Mode
 
 After generating the embedded JavaScript bundle, the app can be opened directly:
@@ -96,7 +108,11 @@ CMSSWGraphViz/
 ├── data/
 │   ├── bundle.json
 │   └── rechits.json
+├── samples/
+│   └── catalog.json
 ├── server.py
+├── truth_pipeline.py
+├── visualizeTruthGraph
 ├── run.sh
 ├── requirements.txt
 └── .s2i/bin/run

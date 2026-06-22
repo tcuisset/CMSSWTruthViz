@@ -14,9 +14,22 @@ import json
 import subprocess
 import threading
 import time
+import shutil
+import uuid
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 import cgi
+
+from truth_pipeline import (
+    PipelineOptions,
+    default_job_root,
+    find_catalog_sample,
+    load_catalog,
+    materialize_catalog_sample,
+    parse_dumper_args,
+    parse_non_negative_int,
+    process_cmssw_root,
+)
 
 
 EMPTY_BUNDLE = {
@@ -34,9 +47,12 @@ EMPTY_BUNDLE = {
 BUILD_STATUS_LOCK = threading.Lock()
 BUILD_STATUS = {
     "state": "idle",
+    "phase": None,
+    "jobId": None,
     "message": "No bundle build is running.",
     "startedAt": None,
     "finishedAt": None,
+    "outputs": None,
 }
 
 
@@ -57,9 +73,11 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
     try:
         set_build_status(
             state="running",
+            phase="bundle",
             message="Regenerating graph bundle...",
             startedAt=time.time(),
             finishedAt=None,
+            outputs=None,
         )
 
         print("\nRegenerating bundle...")
@@ -84,6 +102,7 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
             print(f"  ERROR: {error_msg}")
             set_build_status(
                 state="error",
+                phase="bundle",
                 message=f"Bundle generation failed: {error_msg}",
                 finishedAt=time.time(),
             )
@@ -95,6 +114,7 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
         if root_path is not None:
             set_build_status(
                 state="running",
+                phase="rechits",
                 message=f"Regenerating rechits data from event {rechits_event_index}...",
             )
             print(f"\nRegenerating rechits data from event {rechits_event_index}...")
@@ -121,6 +141,7 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
                 print(f"  ERROR: {error_msg}")
                 set_build_status(
                     state="error",
+                    phase="rechits",
                     message=f"Rechits generation failed: {error_msg}",
                     finishedAt=time.time(),
                 )
@@ -131,13 +152,19 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
 
         set_build_status(
             state="success",
+            phase="complete",
             message="Upload processing completed successfully.",
             finishedAt=time.time(),
+            outputs={
+                "bundlePath": str(project_root / "data" / "bundle.json"),
+                "rechitsJsonPath": str(project_root / "data" / "rechits.json") if root_path is not None else None,
+            },
         )
 
     except subprocess.TimeoutExpired:
         set_build_status(
             state="error",
+            phase="timeout",
             message="Upload processing timed out.",
             finishedAt=time.time(),
         )
@@ -145,8 +172,45 @@ def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_ind
         print(f"  ERROR: {str(e)}")
         set_build_status(
             state="error",
-                message=f"Upload processing failed: {str(e)}",
-                finishedAt=time.time(),
+            phase="error",
+            message=f"Upload processing failed: {str(e)}",
+            finishedAt=time.time(),
+        )
+
+
+def run_cmssw_build(input_root, options):
+    """Run the CMSSW ROOT pipeline in the background."""
+    try:
+        def update(**updates):
+            updates.setdefault("state", "running")
+            updates.setdefault("jobId", options.job_id)
+            set_build_status(**updates)
+
+        result = process_cmssw_root(input_root, options, status_callback=update)
+        set_build_status(
+            state="success",
+            phase="complete",
+            jobId=result.job_id,
+            message="CMSSW ROOT processing completed successfully.",
+            finishedAt=time.time(),
+            outputs=result.as_dict(),
+        )
+    except subprocess.TimeoutExpired:
+        set_build_status(
+            state="error",
+            phase="timeout",
+            jobId=options.job_id,
+            message="CMSSW ROOT processing timed out.",
+            finishedAt=time.time(),
+        )
+    except Exception as exc:
+        print(f"  ERROR: {str(exc)}")
+        set_build_status(
+            state="error",
+            phase="error",
+            jobId=options.job_id,
+            message=f"CMSSW ROOT processing failed: {str(exc)}",
+            finishedAt=time.time(),
         )
 
 
@@ -175,6 +239,9 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'build': get_build_status(),
             })
             return
+        if path == '/samples' or path.endswith('/samples'):
+            self.handle_samples()
+            return
 
         super().do_GET()
 
@@ -183,12 +250,19 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = urlparse(self.path).path.rstrip('/')
         if path == '/upload' or path.endswith('/upload'):
             self.handle_upload()
+        elif path == '/process-root' or path.endswith('/process-root'):
+            self.handle_process_root()
+        elif '/samples/' in path and path.endswith('/process'):
+            self.handle_process_sample(path)
         else:
             self.send_json_response({'success': False, 'error': 'Not Found'}, 404)
 
     def handle_upload(self):
-        """Handle file upload and bundle regeneration"""
+        """Handle prepared DOT/ROOT upload and bundle regeneration."""
         try:
+            if not self.validate_upload_size():
+                return
+
             # Parse multipart form data
             content_type = self.headers.get('Content-Type')
             if not content_type or not content_type.startswith('multipart/form-data'):
@@ -205,6 +279,13 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Get uploaded files
             dot_item = self.get_upload_item(form, 'dotFile')
             root_item = self.get_upload_item(form, 'rootFile')
+            mode = self.get_form_value(form, 'mode', 'prepared')
+            if mode != 'prepared':
+                self.send_json_response({
+                    'success': False,
+                    'error': 'Use /process-root for CMSSW ROOT input'
+                }, 400)
+                return
             try:
                 rechits_event_index = self.get_non_negative_int_field(form, 'rechitsEventIndex', 0)
             except ValueError as exc:
@@ -242,9 +323,12 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             set_build_status(
                 state="queued",
+                phase="prepared",
+                jobId=None,
                 message="Input files uploaded. Processing is starting...",
                 startedAt=time.time(),
                 finishedAt=None,
+                outputs=None,
             )
             thread = threading.Thread(
                 target=run_uploaded_build,
@@ -266,6 +350,158 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'error': f'Upload failed: {str(e)}'
             }, 500)
 
+    def handle_process_root(self):
+        """Handle CMSSW EDM ROOT upload and launch ROOT-to-viewer processing."""
+        try:
+            if not self.validate_upload_size():
+                return
+
+            content_type = self.headers.get('Content-Type')
+            if not content_type or not content_type.startswith('multipart/form-data'):
+                self.send_json_response({'success': False, 'error': 'Invalid content type'}, 400)
+                return
+
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={'REQUEST_METHOD': 'POST'}
+            )
+
+            root_item = self.get_upload_item(form, 'rootFile')
+            if root_item is None:
+                self.send_json_response({'success': False, 'error': 'CMSSW ROOT file is required'}, 400)
+                return
+
+            if get_build_status()["state"] in {"queued", "running"}:
+                self.send_json_response({
+                    'success': False,
+                    'error': 'A processing job is already running'
+                }, 409)
+                return
+
+            try:
+                event_index = self.get_non_negative_int_field(form, 'eventIndex', 0)
+                dumper_args = parse_dumper_args(self.get_form_value(form, 'dumperArgs', ''))
+            except ValueError as exc:
+                self.send_json_response({'success': False, 'error': str(exc)}, 400)
+                return
+
+            project_root = Path(__file__).parent
+            job_root = default_job_root(project_root)
+            job_id = f"{int(time.time())}-upload-{uuid.uuid4().hex[:8]}"
+            upload_dir = job_root / job_id / "upload"
+            upload_dir.mkdir(parents=True, exist_ok=False)
+            root_path = upload_dir / "input.root"
+            with open(root_path, 'wb') as f:
+                shutil.copyfileobj(root_item.file, f)
+
+            options = PipelineOptions(
+                event_index=event_index,
+                dumper_args=dumper_args,
+                job_id=job_id,
+                job_root=job_root,
+            )
+
+            set_build_status(
+                state="queued",
+                phase="cmssw",
+                jobId=job_id,
+                message="CMSSW ROOT file uploaded. Processing is starting...",
+                startedAt=time.time(),
+                finishedAt=None,
+                outputs=None,
+            )
+            thread = threading.Thread(
+                target=run_cmssw_build,
+                args=(root_path, options),
+                daemon=True,
+            )
+            thread.start()
+
+            self.send_json_response({
+                'success': True,
+                'message': 'CMSSW ROOT processing is running.',
+                'build': get_build_status(),
+            }, 202)
+
+        except Exception as e:
+            print(f"  ERROR: {str(e)}")
+            self.send_json_response({
+                'success': False,
+                'error': f'CMSSW ROOT processing failed to start: {str(e)}'
+            }, 500)
+
+    def handle_samples(self):
+        """Return the configured sample catalogue."""
+        try:
+            self.send_json_response({'success': True, 'catalog': load_catalog()})
+        except Exception as exc:
+            self.send_json_response({'success': False, 'error': str(exc)}, 500)
+
+    def handle_process_sample(self, path):
+        """Launch processing for a manifest-declared sample."""
+        try:
+            if get_build_status()["state"] in {"queued", "running"}:
+                self.send_json_response({
+                    'success': False,
+                    'error': 'A processing job is already running'
+                }, 409)
+                return
+
+            parts = [part for part in path.split('/') if part]
+            route = parts[-3:] if len(parts) >= 3 else []
+            if len(route) != 3 or route[0] != 'samples' or route[2] != 'process':
+                self.send_json_response({'success': False, 'error': 'Not Found'}, 404)
+                return
+
+            sample_id = route[1]
+            sample = find_catalog_sample(sample_id)
+            job_root = default_job_root(Path(__file__).parent)
+            job_id = f"{int(time.time())}-sample-{sample_id}-{uuid.uuid4().hex[:8]}"
+            staging_dir = job_root / job_id / "sample"
+            staging_dir.mkdir(parents=True, exist_ok=False)
+
+            event_index = parse_non_negative_int(sample.get("eventIndex", 0), "eventIndex")
+            dumper_args = sample.get("dumperArgs", [])
+            if isinstance(dumper_args, str):
+                dumper_args = parse_dumper_args(dumper_args)
+            if not isinstance(dumper_args, list):
+                self.send_json_response({'success': False, 'error': 'sample dumperArgs must be a list or string'}, 400)
+                return
+
+            input_root = materialize_catalog_sample(sample, staging_dir)
+            options = PipelineOptions(
+                event_index=event_index,
+                dumper_args=[str(arg) for arg in dumper_args],
+                job_id=job_id,
+                job_root=job_root,
+            )
+
+            set_build_status(
+                state="queued",
+                phase="sample",
+                jobId=job_id,
+                message=f"Sample {sample_id} processing is starting...",
+                startedAt=time.time(),
+                finishedAt=None,
+                outputs=None,
+            )
+            thread = threading.Thread(
+                target=run_cmssw_build,
+                args=(input_root, options),
+                daemon=True,
+            )
+            thread.start()
+
+            self.send_json_response({
+                'success': True,
+                'message': 'Sample processing is running.',
+                'build': get_build_status(),
+            }, 202)
+
+        except Exception as exc:
+            self.send_json_response({'success': False, 'error': str(exc)}, 500)
+
     def get_upload_item(self, form, key):
         """Return a file upload item only when the field has a selected file."""
         if key not in form:
@@ -279,6 +515,39 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             return None
 
         return item
+
+    def get_form_value(self, form, key, default=None):
+        """Return a scalar form field value."""
+        if key not in form:
+            return default
+
+        item = form[key]
+        if isinstance(item, list):
+            item = item[0] if item else None
+
+        return getattr(item, 'value', default) if item is not None else default
+
+    def validate_upload_size(self):
+        """Reject uploads above TRUTHVIZ_MAX_UPLOAD_MB when Content-Length is present."""
+        max_mb = int(os.environ.get("TRUTHVIZ_MAX_UPLOAD_MB", "2048"))
+        content_length = self.headers.get('Content-Length')
+        if not content_length:
+            return True
+
+        try:
+            size_bytes = int(content_length)
+        except ValueError:
+            self.send_json_response({'success': False, 'error': 'Invalid Content-Length'}, 400)
+            return False
+
+        if size_bytes > max_mb * 1024 * 1024:
+            self.send_json_response({
+                'success': False,
+                'error': f'Upload exceeds TRUTHVIZ_MAX_UPLOAD_MB={max_mb}'
+            }, 413)
+            return False
+
+        return True
 
     def get_non_negative_int_field(self, form, key, default):
         """Return a non-negative integer form field value."""

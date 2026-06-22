@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""
+Generate viewer inputs from a CMSSW EDM ROOT file, then optionally start the app server.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from truth_pipeline import PipelineError, PipelineOptions, parse_dumper_args, process_cmssw_root
+
+
+def port_number(value):
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid port: {value}") from exc
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate Truth Graph Viewer inputs from a CMSSW EDM ROOT file."
+    )
+    parser.add_argument("input_root", type=Path, help="Input CMSSW EDM ROOT file.")
+    parser.add_argument(
+        "--event-index",
+        type=int,
+        default=0,
+        help="Zero-based event index to visualize. Defaults to 0.",
+    )
+    parser.add_argument(
+        "--cmssw-src",
+        type=Path,
+        default=None,
+        help="CMSSW src directory. Defaults to TRUTHVIZ_CMSSW_SRC, CMSSW_BASE/src, or sibling CMSSW_20_1_X_2026-06-20-1100/src.",
+    )
+    parser.add_argument(
+        "--job-root",
+        type=Path,
+        default=None,
+        help="Directory where processing jobs are stored. Defaults to data/jobs or TRUTHVIZ_JOB_ROOT.",
+    )
+    parser.add_argument(
+        "--dumper-args",
+        default="",
+        help="Extra arguments passed to dumpTruthGraphsFromGENSIMRECO_cfg.py, quoted as one string.",
+    )
+    parser.add_argument(
+        "--no-server",
+        action="store_true",
+        help="Generate viewer files and exit without starting server.py.",
+    )
+    parser.add_argument("--host", default="localhost", help="Server host. Defaults to localhost.")
+    parser.add_argument("--port", type=port_number, default=8009, help="Server start port. Defaults to 8009.")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    project_root = Path(__file__).resolve().parent
+
+    try:
+        result = process_cmssw_root(
+            args.input_root,
+            PipelineOptions(
+                event_index=args.event_index,
+                dumper_args=parse_dumper_args(args.dumper_args),
+                job_root=args.job_root,
+                cmssw_src=args.cmssw_src,
+            ),
+        )
+    except (PipelineError, ValueError, subprocess.TimeoutExpired) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    print("Truth graph inputs generated.")
+    print(f"  Job: {result.job_id}")
+    print(f"  DOT: {result.dot_path}")
+    print(f"  Rechits ROOT: {result.rechits_root_path}")
+    print(f"  Bundle: {result.viewer_bundle_path or result.bundle_path}")
+    print(f"  Rechits JSON: {result.viewer_rechits_path or result.rechits_json_path}")
+
+    if args.no_server:
+        return 0
+
+    url = f"http://{args.host}:{args.port}/app/"
+    print(f"Starting viewer server: {url}")
+    os.execv(
+        sys.executable,
+        [
+            sys.executable,
+            str(project_root / "server.py"),
+            "--host",
+            args.host,
+            "--start-port",
+            str(args.port),
+        ],
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

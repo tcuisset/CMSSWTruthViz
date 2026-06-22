@@ -1,9 +1,10 @@
 # Server And Preprocessing
 
-The Python side has two jobs:
+The Python side has three jobs:
 
 1. Convert DOT and optional ROOT input files into JSON consumed by the browser.
 2. Serve the app locally and support browser uploads in server mode.
+3. Run the CMSSW dumper on a CMSSW EDM ROOT input and publish the generated viewer files.
 
 ## Python Dependencies
 
@@ -118,8 +119,11 @@ Server mode enables the upload modal in the browser.
 
 ### `POST /upload`
 
+Prepared input mode. This keeps the original upload behavior.
+
 Accepts multipart form fields:
 
+- `mode`: optional, must be `prepared` when provided.
 - `dotFile`: required DOT graph file.
 - `rootFile`: optional ROOT file containing rechits.
 - `rechitsEventIndex`: optional non-negative integer, default `0`.
@@ -152,8 +156,73 @@ Returns current background build state:
 ```
 
 Build states are `idle`, `queued`, `running`, `success`, and `error`.
+The status object also includes `phase`, `jobId`, and `outputs` when available.
 
 `app/js/upload.js` polls this endpoint until upload processing finishes, then reloads the page.
+
+### `POST /process-root`
+
+CMSSW input mode. Accepts multipart form fields:
+
+- `rootFile`: required CMSSW EDM ROOT file.
+- `eventIndex`: optional non-negative integer, default `0`.
+- `dumperArgs`: optional extra arguments passed to `dumpTruthGraphsFromGENSIMRECO_cfg.py`.
+
+The server stores the upload under `TRUTHVIZ_JOB_ROOT`, runs:
+
+```bash
+cmsRun PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py <input.root> -n 1 --skipEvents <eventIndex> -o <job>/cmssw
+```
+
+Then it converts the event-suffixed logical DOT and generated `rechits_nano*.root`
+into the current viewer files.
+
+### `GET /samples`
+
+Returns the configured sample catalogue from `TRUTHVIZ_CATALOG`, defaulting to
+`samples/catalog.json`.
+
+### `POST /samples/<id>/process`
+
+Starts a CMSSW processing job for one manifest-declared sample. The browser never
+sends arbitrary server paths; it can only request sample ids listed in the manifest.
+
+Manifest shape:
+
+```json
+{
+  "samples": [
+    {
+      "id": "zmm",
+      "label": "Z to muons",
+      "description": "Small GEN-SIM-RECO sample",
+      "path": "/data/samples/zmm.root",
+      "eventIndex": 0,
+      "dumperArgs": "--no-keepSpectators -s 23"
+    }
+  ]
+}
+```
+
+## CMSSW Pipeline
+
+The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
+
+- `TRUTHVIZ_CMSSW_SRC`: CMSSW `src` directory.
+- `TRUTHVIZ_JOB_ROOT`: writable job directory, default `data/jobs`.
+- `TRUTHVIZ_CATALOG`: sample manifest path, default `samples/catalog.json`.
+- `TRUTHVIZ_MAX_UPLOAD_MB`: upload size limit in MiB, default `2048`.
+- `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: cmsRun timeout, default `3600`.
+- `TRUTHVIZ_CMSRUN_WRAPPER`: optional wrapper for only the `cmsRun` step,
+  for example `cmssw-el9` on non-EL9 hosts.
+
+Local CLI:
+
+```bash
+./visualizeTruthGraph myInputFile.root --event-index 0
+./visualizeTruthGraph myInputFile.root --event-index 4 --no-server
+TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9 ./visualizeTruthGraph myInputFile.root --no-server
+```
 
 ## run.sh
 

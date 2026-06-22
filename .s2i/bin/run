@@ -4,10 +4,34 @@ set -euo pipefail
 if [ -d "${APP_ROOT:-/opt/app-root}/src" ]; then
     cd "${APP_ROOT:-/opt/app-root}/src"
 fi
+APP_SRC="$(pwd)"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     PYTHON_BIN="python3"
+fi
+
+if [ -n "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
+    if [ ! -d "$TRUTHVIZ_CMSSW_SRC" ]; then
+        echo "ERROR: TRUTHVIZ_CMSSW_SRC does not exist: $TRUTHVIZ_CMSSW_SRC" >&2
+        exit 1
+    fi
+    cd "$TRUTHVIZ_CMSSW_SRC"
+    if ! CMSSW_ENV="$(scram runtime -sh)" || ! eval "$CMSSW_ENV" >/dev/null 2>&1; then
+        echo "ERROR: could not initialize CMSSW runtime with scram runtime -sh in $TRUTHVIZ_CMSSW_SRC" >&2
+        exit 1
+    fi
+    cd "$APP_SRC"
+elif [ -n "${CMSSW_BASE:-}" ]; then
+    cd "$CMSSW_BASE/src"
+    if ! CMSSW_ENV="$(scram runtime -sh)" || ! eval "$CMSSW_ENV" >/dev/null 2>&1; then
+        echo "ERROR: could not initialize CMSSW runtime with scram runtime -sh in $CMSSW_BASE/src" >&2
+        exit 1
+    fi
+    cd "$APP_SRC"
+elif ! command -v cmsRun >/dev/null 2>&1; then
+    echo "ERROR: cmsRun is not available. Run this app in a CMSSW-capable image or set TRUTHVIZ_CMSSW_SRC/CMSSW_BASE." >&2
+    exit 1
 fi
 
 exec "$PYTHON_BIN" server.py \

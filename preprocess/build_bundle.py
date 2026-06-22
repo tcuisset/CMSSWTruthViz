@@ -5,14 +5,16 @@ Orchestrate parsing and build final JSON bundle.
 
 import json
 import sys
+import argparse
 from pathlib import Path
-from parse_graph import parse_dot_file
 
 
-def build_bundle(dot_path, output_path):
+def build_bundle(dot_path, output_path, generate_static_js=True):
     """
     Build JSON bundle from a DOT truth graph.
     """
+    from parse_graph import parse_dot_file
+
     print("=" * 60)
     print("Building Graph Bundle")
     print("=" * 60)
@@ -51,15 +53,16 @@ def build_bundle(dot_path, output_path):
     print(f"  Edges: {bundle['metadata']['edge_count']:,}")
     print(f"  Output: {output_path}")
 
-    # Also generate bundle.js for static mode
-    try:
-        from generate_bundle_js import generate_bundle_js
-        js_output = output_path.parent.parent / "app" / "js" / "bundle.js"
-        print(f"\nGenerating bundle.js for static mode...")
-        generate_bundle_js(output_path, js_output)
-    except Exception as e:
-        print(f"\nWarning: Could not generate bundle.js: {e}")
-        print("Run 'python preprocess/generate_bundle_js.py' manually if needed.")
+    if generate_static_js:
+        # Also generate bundle.js for static mode
+        try:
+            from generate_bundle_js import generate_bundle_js
+            js_output = output_path.parent.parent / "app" / "js" / "bundle.js"
+            print(f"\nGenerating bundle.js for static mode...")
+            generate_bundle_js(output_path, js_output)
+        except Exception as e:
+            print(f"\nWarning: Could not generate bundle.js: {e}")
+            print("Run 'python preprocess/generate_bundle_js.py' manually if needed.")
 
 
 def main():
@@ -73,11 +76,17 @@ def main():
     dot_path = next((path for path in dot_candidates if path.exists()), dot_candidates[0])
     output_path = project_root / "data" / "bundle.json"
 
-    # Allow command-line overrides
-    if len(sys.argv) >= 2:
-        dot_path = Path(sys.argv[1])
-    if len(sys.argv) >= 3:
-        output_path = Path(sys.argv[2])
+    parser = argparse.ArgumentParser(description="Build JSON bundle from a DOT truth graph.")
+    parser.add_argument("dot_file", nargs="?", type=Path, default=dot_path)
+    parser.add_argument("output_file", nargs="?", type=Path, default=output_path)
+    parser.add_argument(
+        "--no-js-output",
+        action="store_true",
+        help="Only write JSON; do not generate app/js/bundle.js.",
+    )
+    args = parser.parse_args()
+    dot_path = args.dot_file
+    output_path = args.output_file
 
     # Validate input files
     if not dot_path.exists():
@@ -85,7 +94,7 @@ def main():
         print("\nUsage: python build_bundle.py [dot_file] [output_file]")
         sys.exit(1)
 
-    build_bundle(dot_path, output_path)
+    build_bundle(dot_path, output_path, generate_static_js=not args.no_js_output)
 
 
 if __name__ == "__main__":
