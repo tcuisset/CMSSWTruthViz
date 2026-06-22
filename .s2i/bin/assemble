@@ -18,29 +18,4 @@ else
 fi
 
 cd "$APP_SRC"
-
-if [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" = "1" ]; then
-    echo "Skipping CMSSW install because TRUTHVIZ_SKIP_CMSSW_INSTALL=1"
-    exit 0
-fi
-
-CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
-CMSSW_INSTALL_SCRIPT="${TRUTHVIZ_CMSSW_INSTALL_SCRIPT:-/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh}"
-
-if [ ! -r "$CMSSET_DEFAULT" ]; then
-    echo "ERROR: CMS bootstrap was not found: $CMSSET_DEFAULT" >&2
-    echo "The S2I build needs /cvmfs mounted, or set TRUTHVIZ_SKIP_CMSSW_INSTALL=1." >&2
-    exit 1
-fi
-
-if [ ! -x "$CMSSW_INSTALL_SCRIPT" ]; then
-    echo "ERROR: CMSSW install script is not executable: $CMSSW_INSTALL_SCRIPT" >&2
-    exit 1
-fi
-
-export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
-# shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
-source "$CMSSET_DEFAULT"
-
-echo "Installing CMSSW area in $APP_SRC with $CMSSW_INSTALL_SCRIPT"
-"$CMSSW_INSTALL_SCRIPT"
+echo "S2I assemble complete. CMSSW is installed at runtime into the configured writable volume."

@@ -11,23 +11,27 @@ Create the app from the `CMSSWGraphViz` repository root:
 oc new-app python:3.11~https://github.com/waredjeb/CMSSWGraphViz.git
 ```
 
-The S2I build installs `requirements.txt`, then `.s2i/bin/assemble` sources the
-CMS environment and runs:
+The S2I build installs `requirements.txt`. CMSSW is installed at runtime into a
+writable volume, because Deployment PVCs are not mounted during the image build.
+For `/process-root` and catalogue samples, the runtime environment must provide:
 
-```bash
-/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
-```
-
-The install script creates the CMSSW area in the app source directory inside the
-image. For `/process-root` and catalogue samples, the build/runtime environment
-must provide:
-
-- `/cvmfs/cms.cern.ch` mounted during the S2I build,
 - `/cvmfs/cms.cern.ch` mounted in the running pod so `cmssw-el9` is available,
 - a writable persistent volume for `TRUTHVIZ_JOB_ROOT`.
 
-At runtime, `.s2i/bin/run` auto-detects the built `CMSSW_*/src` directory. You
-can override it with:
+At runtime, `.s2i/bin/run`:
+
+- looks for an existing `CMSSW_*/src` under `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
+- otherwise sources `/cvmfs/cms.cern.ch/cmsset_default.sh`,
+- runs `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh` in
+  `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
+- exports `TRUTHVIZ_CMSSW_SRC` to the installed `CMSSW_*/src`,
+- uses `cmssw-el9` as `TRUTHVIZ_CMSRUN_WRAPPER` when direct `cmsRun` is absent.
+
+By default, `TRUTHVIZ_CMSSW_INSTALL_ROOT` is derived from `TRUTHVIZ_JOB_ROOT`:
+`$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw`. If `TRUTHVIZ_JOB_ROOT=/persistent/jobs`,
+CMSSW installs into `/persistent/cmssw`.
+
+You can override the CMSSW source directly with:
 
 ```bash
 TRUTHVIZ_CMSSW_SRC=/path/to/CMSSW/src
@@ -35,15 +39,7 @@ TRUTHVIZ_CMSSW_SRC=/path/to/CMSSW/src
 CMSSW_BASE=/path/to/CMSSW
 ```
 
-At runtime `.s2i/bin/run`:
-
-- uses direct `cmsRun` if it is already available,
-- otherwise sources `/cvmfs/cms.cern.ch/cmsset_default.sh`,
-- verifies that `cmssw-el9` is available,
-- exports `TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` so only the `cmsRun` job runs in
-  the EL9 CMSSW container while the Python server stays in the S2I container.
-
-It then starts:
+After CMSSW setup, `.s2i/bin/run` starts:
 
 ```bash
 python server.py --host 0.0.0.0 --start-port ${PORT:-8080} --no-auto-find-port
@@ -60,17 +56,13 @@ Useful runtime configuration:
 
 ```bash
 TRUTHVIZ_JOB_ROOT=/persistent/jobs
+TRUTHVIZ_CMSSW_INSTALL_ROOT=/persistent/cmssw
 TRUTHVIZ_CATALOG=/opt/app-root/src/samples/catalog.json
 TRUTHVIZ_MAX_UPLOAD_MB=2048
 TRUTHVIZ_CMSRUN_TIMEOUT_SEC=3600
 CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh
-```
-
-Useful build-time configuration:
-
-```bash
 TRUTHVIZ_CMSSW_INSTALL_SCRIPT=/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
-TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only for builds that provide CMSSW another way
+TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only when TRUTHVIZ_CMSSW_SRC/CMSSW_BASE is provided another way
 ```
 
 Expose the service if needed:

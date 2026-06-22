@@ -210,6 +210,9 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
 
 - `TRUTHVIZ_CMSSW_SRC`: CMSSW `src` directory.
 - `TRUTHVIZ_JOB_ROOT`: writable job directory, default `data/jobs`.
+- `TRUTHVIZ_CMSSW_INSTALL_ROOT`: writable runtime CMSSW install directory,
+  default `$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw` when `TRUTHVIZ_JOB_ROOT` is set,
+  otherwise `data/cmssw`.
 - `TRUTHVIZ_CATALOG`: sample manifest path, default `samples/catalog.json`.
 - `TRUTHVIZ_MAX_UPLOAD_MB`: upload size limit in MiB, default `2048`.
 - `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: cmsRun timeout, default `3600`.
@@ -217,14 +220,15 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
   for example `cmssw-el9` on non-EL9 hosts.
 - `CMSSET_DEFAULT`: CMS bootstrap script used by S2I when direct `cmsRun` is not
   available, default `/cvmfs/cms.cern.ch/cmsset_default.sh`.
+- `TRUTHVIZ_CMSSW_INSTALL_SCRIPT`: CMSSW install script used at S2I runtime,
+  default `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh`.
 
 In OpenShift S2I, the app can run in a Python container without direct `cmsRun`.
 Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and sets
 `TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` automatically when needed.
-The S2I build hook `.s2i/bin/assemble` creates the CMSSW area by sourcing the CMS
-environment and running `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh`
-in the app source directory. Override with `TRUTHVIZ_CMSSW_INSTALL_SCRIPT`, or
-set `TRUTHVIZ_SKIP_CMSSW_INSTALL=1` when CMSSW is provided another way.
+The S2I runtime hook installs CMSSW into the writable volume on first startup
+when no existing `CMSSW_*/src` is found. Set `TRUTHVIZ_SKIP_CMSSW_INSTALL=1`
+only when `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is provided another way.
 
 Local CLI:
 

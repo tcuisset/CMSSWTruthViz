@@ -6,22 +6,86 @@ if [ -d "${APP_ROOT:-/opt/app-root}/src" ]; then
 fi
 APP_SRC="$(pwd)"
 
-if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
-    for candidate in "$APP_SRC"/CMSSW_*/src; do
-        if [ -d "$candidate/PhysicsTools/TruthInfo/test" ]; then
-            export TRUTHVIZ_CMSSW_SRC="$candidate"
-            echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
-            break
-        fi
-    done
-fi
-
 PYTHON_BIN="${PYTHON_BIN:-python}"
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     PYTHON_BIN="python3"
 fi
 
 CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+CMSSW_INSTALL_SCRIPT="${TRUTHVIZ_CMSSW_INSTALL_SCRIPT:-/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh}"
+CMSSW_INSTALL_ROOT="${TRUTHVIZ_CMSSW_INSTALL_ROOT:-}"
+
+if [ -z "$CMSSW_INSTALL_ROOT" ]; then
+    if [ -n "${TRUTHVIZ_JOB_ROOT:-}" ]; then
+        CMSSW_INSTALL_ROOT="$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw"
+    else
+        CMSSW_INSTALL_ROOT="$APP_SRC/data/cmssw"
+    fi
+fi
+
+find_cmssw_src() {
+    local root="$1"
+    local candidate
+    for candidate in "$root"/CMSSW_*/src; do
+        if [ -d "$candidate/PhysicsTools/TruthInfo/test" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
+    if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+        export TRUTHVIZ_CMSSW_SRC="$found_src"
+        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != "1" ]; then
+        if [ ! -r "$CMSSET_DEFAULT" ]; then
+            echo "ERROR: CMS bootstrap was not found: $CMSSET_DEFAULT" >&2
+            echo "Mount /cvmfs or set TRUTHVIZ_SKIP_CMSSW_INSTALL=1 and provide TRUTHVIZ_CMSSW_SRC/CMSSW_BASE." >&2
+            exit 1
+        fi
+        if [ ! -x "$CMSSW_INSTALL_SCRIPT" ]; then
+            echo "ERROR: CMSSW install script is not executable: $CMSSW_INSTALL_SCRIPT" >&2
+            exit 1
+        fi
+
+        mkdir -p "$CMSSW_INSTALL_ROOT"
+        install_lock="$CMSSW_INSTALL_ROOT/.install.lock"
+        until mkdir "$install_lock" 2>/dev/null; do
+            echo "Waiting for CMSSW install lock: $install_lock"
+            sleep 10
+            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+                export TRUTHVIZ_CMSSW_SRC="$found_src"
+                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+                break
+            fi
+        done
+
+        if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
+            trap 'rmdir "$install_lock" 2>/dev/null || true' EXIT
+            export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+            # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
+            source "$CMSSET_DEFAULT"
+            echo "Installing CMSSW area in $CMSSW_INSTALL_ROOT with $CMSSW_INSTALL_SCRIPT"
+            (
+                cd "$CMSSW_INSTALL_ROOT"
+                "$CMSSW_INSTALL_SCRIPT"
+            )
+            rmdir "$install_lock" 2>/dev/null || true
+            trap - EXIT
+
+            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+                export TRUTHVIZ_CMSSW_SRC="$found_src"
+                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+            else
+                echo "ERROR: CMSSW install completed but no CMSSW_*/src area was found in $CMSSW_INSTALL_ROOT" >&2
+                exit 1
+            fi
+        fi
+    fi
+fi
+
 if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ] && ! command -v cmsRun >/dev/null 2>&1; then
     if [ ! -r "$CMSSET_DEFAULT" ]; then
         echo "ERROR: cmsRun is not available and CMS bootstrap was not found: $CMSSET_DEFAULT" >&2
