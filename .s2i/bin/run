@@ -97,13 +97,17 @@ if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ] && ! command -v cmsRun >/dev/null 2>&1;
     # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
     source "$CMSSET_DEFAULT"
 
-    if ! command -v cmssw-el9 >/dev/null 2>&1; then
-        echo "ERROR: cmsRun is not available and cmssw-el9 was not found after sourcing $CMSSET_DEFAULT" >&2
-        exit 1
-    fi
+    if command -v scram >/dev/null 2>&1; then
+        echo "Using direct CMSSW runtime via scram"
+    else
+        if ! command -v cmssw-el9 >/dev/null 2>&1; then
+            echo "ERROR: neither direct scram nor cmssw-el9 was found after sourcing $CMSSET_DEFAULT" >&2
+            exit 1
+        fi
 
-    export TRUTHVIZ_CMSRUN_WRAPPER="cmssw-el9"
-    echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for cmsRun jobs"
+        export TRUTHVIZ_CMSRUN_WRAPPER="cmssw-el9"
+        echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for cmsRun jobs"
+    fi
 elif [ -n "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
     read -r WRAPPER_CMD _ <<< "$TRUTHVIZ_CMSRUN_WRAPPER"
     if ! command -v "$WRAPPER_CMD" >/dev/null 2>&1; then

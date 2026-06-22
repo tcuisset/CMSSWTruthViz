@@ -114,6 +114,38 @@ else
 fi
 echo ""
 
+CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
+    if [ -r "$CMSSET_DEFAULT" ]; then
+        export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+        # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
+        source "$CMSSET_DEFAULT"
+    fi
+
+    scram_arch=""
+    if command -v scram >/dev/null 2>&1; then
+        scram_arch="$(scram arch 2>/dev/null || true)"
+    fi
+
+    if [[ "$scram_arch" != el9* ]]; then
+        if command -v cmssw-el9 >/dev/null 2>&1; then
+            export TRUTHVIZ_CMSRUN_WRAPPER="cmssw-el9"
+            if [ -n "$scram_arch" ]; then
+                echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for local cmsRun jobs because scram arch is $scram_arch"
+            else
+                echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for local cmsRun jobs because scram arch is unavailable"
+            fi
+            echo ""
+        elif [ -n "$scram_arch" ]; then
+            echo "Warning: scram arch is $scram_arch, but cmssw-el9 was not found; local cmsRun jobs may fail."
+            echo ""
+        else
+            echo "Warning: scram arch is unavailable and cmssw-el9 was not found; local cmsRun jobs may fail."
+            echo ""
+        fi
+    fi
+fi
+
 should_build_bundle=false
 if [ ! -f "$BUNDLE_PATH" ]; then
     echo "Bundle not found. Generating from selected DOT file..."

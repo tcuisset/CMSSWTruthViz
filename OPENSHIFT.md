@@ -1,21 +1,21 @@
-# OpenShift S2I Deployment
+# OpenShift Deployment
 
-This repository can be deployed with OpenShift S2I. The runtime container does
-not need `cmsRun` installed directly, but it must have `/cvmfs` mounted so the
-entrypoint can source the CMS bootstrap and run CMSSW jobs through `cmssw-el9`.
-More general setup notes are in [INSTALL.md](INSTALL.md).
+The recommended OpenShift deployment uses the included `Containerfile`, based on
+`cmssw/el9:x86_64`. This avoids nested Singularity/Apptainer: the Python server
+and `cmsRun` run in the same EL9-compatible container, and CMSSW is installed
+into a writable PVC at runtime. More general setup notes are in [INSTALL.md](INSTALL.md).
 
-Create the app from the `CMSSWGraphViz` repository root:
+Build from the `CMSSWGraphViz` repository root with Docker strategy:
 
 ```bash
-oc new-app python:3.11~https://github.com/waredjeb/CMSSWGraphViz.git
+oc new-build --strategy=docker --binary --name=cmssw-truth-viz-dev
+oc start-build cmssw-truth-viz-dev --from-dir=. --follow
+oc new-app cmsswgraphviz
 ```
 
-The S2I build installs `requirements.txt`. CMSSW is installed at runtime into a
-writable volume, because Deployment PVCs are not mounted during the image build.
 For `/process-root` and catalogue samples, the runtime environment must provide:
 
-- `/cvmfs/cms.cern.ch` mounted in the running pod so `cmssw-el9` is available,
+- `/cvmfs/cms.cern.ch` mounted in the running pod,
 - a writable persistent volume for `TRUTHVIZ_JOB_ROOT`.
 
 At runtime, `.s2i/bin/run`:
@@ -25,7 +25,7 @@ At runtime, `.s2i/bin/run`:
 - runs `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh` in
   `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
 - exports `TRUTHVIZ_CMSSW_SRC` to the installed `CMSSW_*/src`,
-- uses `cmssw-el9` as `TRUTHVIZ_CMSRUN_WRAPPER` when direct `cmsRun` is absent.
+- uses direct `scram`/`cmsRun` in the EL9 container.
 
 By default, `TRUTHVIZ_CMSSW_INSTALL_ROOT` is derived from `TRUTHVIZ_JOB_ROOT`:
 `$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw`. If `TRUTHVIZ_JOB_ROOT=/persistent/jobs`,
@@ -50,7 +50,7 @@ On startup, `server.py`:
 - uses `data/bundle.json` if it exists,
 - generates `data/bundle.json` from `truthgraph.dot` or `dependency.gv` if either file is present,
 - otherwise creates an empty bundle so the web UI can start and accept DOT uploads.
-- rejects startup if neither direct `cmsRun` nor `/cvmfs` + `cmssw-el9` is available.
+- rejects startup if neither direct CMSSW tooling nor a configured wrapper is available.
 
 Useful runtime configuration:
 
@@ -64,6 +64,11 @@ CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh
 TRUTHVIZ_CMSSW_INSTALL_SCRIPT=/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
 TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only when TRUTHVIZ_CMSSW_SRC/CMSSW_BASE is provided another way
 ```
+
+The old Python S2I flow can still serve prepared DOT/ROOT files, but it is not
+recommended for CMSSW processing because `cmssw-el9` requires
+Singularity/Apptainer, which is normally absent or blocked inside S2I Python
+runtime images.
 
 Expose the service if needed:
 

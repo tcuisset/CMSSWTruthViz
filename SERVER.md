@@ -216,16 +216,17 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
 - `TRUTHVIZ_CATALOG`: sample manifest path, default `samples/catalog.json`.
 - `TRUTHVIZ_MAX_UPLOAD_MB`: upload size limit in MiB, default `2048`.
 - `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: cmsRun timeout, default `3600`.
-- `TRUTHVIZ_CMSRUN_WRAPPER`: optional wrapper for only the `cmsRun` step,
-  for example `cmssw-el9` on non-EL9 hosts.
+- `TRUTHVIZ_CMSRUN_WRAPPER`: optional wrapper for only the `cmsRun` step. Leave
+  unset in the recommended `cmssw/el9:x86_64` container; set to `cmssw-el9` only
+  in environments where nested Singularity/Apptainer is available and needed.
 - `CMSSET_DEFAULT`: CMS bootstrap script used by S2I when direct `cmsRun` is not
   available, default `/cvmfs/cms.cern.ch/cmsset_default.sh`.
 - `TRUTHVIZ_CMSSW_INSTALL_SCRIPT`: CMSSW install script used at S2I runtime,
   default `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh`.
 
-In OpenShift S2I, the app can run in a Python container without direct `cmsRun`.
-Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and sets
-`TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9` automatically when needed.
+In OpenShift, use the included `Containerfile` based on `cmssw/el9:x86_64`.
+Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and uses direct
+`scram`/`cmsRun` in that EL9 container.
 The S2I runtime hook installs CMSSW into the writable volume on first startup
 when no existing `CMSSW_*/src` is found. Set `TRUTHVIZ_SKIP_CMSSW_INSTALL=1`
 only when `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is provided another way.

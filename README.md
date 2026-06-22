@@ -18,14 +18,14 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 
 ## Documentation Map
 
-- [INSTALL.md](INSTALL.md): local setup, Python virtual environment, CDN/browser requirements, static mode, server mode, and OpenShift S2I deployment.
+- [INSTALL.md](INSTALL.md): local setup, Python virtual environment, CDN/browser requirements, static mode, server mode, and OpenShift deployment.
 - [FRONTEND.md](FRONTEND.md): web app structure, Cytoscape managers, UI controls, layouts, Plotly rechits panel, exports, and keyboard behavior.
 - [DATA_FORMAT.md](DATA_FORMAT.md): `bundle.json`, `bundle.js`, `rechits.json`, node and edge fields, and how DOT attributes are mapped.
 - [SERVER.md](SERVER.md): Python preprocessing scripts, local HTTP server, upload endpoints, background build status, ROOT rechits extraction, and startup behavior.
 - [FEATURES.md](FEATURES.md): current user-facing feature reference.
 - [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md): common truth-graph investigation workflows.
 - [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md): short implementation notes and maintenance guidance.
-- [OPENSHIFT.md](OPENSHIFT.md): concise S2I deployment notes.
+- [OPENSHIFT.md](OPENSHIFT.md): concise OpenShift deployment notes using the CMSSW EL9 container image.
 
 ## Quick Start
 

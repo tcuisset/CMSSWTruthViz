@@ -13,20 +13,38 @@ from truth_pipeline import PipelineOptions
 
 
 class TruthPipelineTests(unittest.TestCase):
-    def test_cmsrun_command_includes_one_event_and_skip_events(self):
+    def test_cmsrun_wrapper_config_sets_skip_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / "wrapper_cfg.py"
+            original_cfg = root / "dumpTruthGraphsFromGENSIMRECO_cfg.py"
+            output_dir = root / "out"
+            input_root = root / "sample.root"
+
+            truth_pipeline.write_cmsrun_wrapper_config(
+                wrapper,
+                original_cfg,
+                input_root,
+                output_dir,
+                PipelineOptions(event_index=7, dumper_args=["--no-keepSpectators", "-s", "23"]),
+            )
+
+            content = wrapper.read_text(encoding="utf-8")
+            self.assertIn("runpy.run_path", content)
+            self.assertIn("file:" + str(input_root), content)
+            self.assertIn("'-n', '1'", content)
+            self.assertIn("--no-keepSpectators", content)
+            self.assertIn("process.source.skipEvents = cms.untracked.uint32(7)", content)
+
+    def test_cmsrun_command_runs_wrapper_config_only(self):
         command = truth_pipeline.cmsrun_command(
             Path("/cmssw/src"),
             Path("/cmssw/src/PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py"),
-            Path("/inputs/sample.root"),
-            Path("/jobs/1/cmssw"),
-            PipelineOptions(event_index=7, dumper_args=["--no-keepSpectators", "-s", "23"]),
         )
 
         self.assertIn("cmsRun", command)
-        self.assertIn("file:/inputs/sample.root", command)
-        self.assertIn("-n 1", command)
-        self.assertIn("--skipEvents 7", command)
-        self.assertIn("--no-keepSpectators -s 23", command)
+        self.assertIn("dumpTruthGraphsFromGENSIMRECO_cfg.py", command)
+        self.assertNotIn("--skipEvents", command)
 
     def test_find_single_newest_uses_event_suffixed_dot(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,15 @@
+.git
+venv/
+__pycache__/
+*.pyc
+data/jobs/
+data/cmssw/
+data/bundle.json
+data/rechits.json
+data/.bundle.source
+app/js/bundle.js
+app/js/rechits.js
+truthgraph.dot
+rechits.root
+*.log
+*.tmp
