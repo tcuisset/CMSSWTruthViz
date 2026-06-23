@@ -121,9 +121,10 @@ The server processes uploads in the background and the browser reloads when proc
 
 ## OpenShift
 
-The recommended OpenShift deployment uses `Containerfile`, based on
+The recommended OpenShift deployment uses `Dockerfile`, based on
 `cmssw/el9:x86_64`, so the app and CMSSW jobs run in an EL9-compatible
-container without nested Singularity/Apptainer.
+container without nested Singularity/Apptainer. `Containerfile` is kept with the
+same contents for local Podman/Docker workflows.
 
 Build from the `CMSSWGraphViz` repository root:
 
@@ -132,6 +133,12 @@ oc new-build --strategy=docker --binary --name=cmsswgraphviz
 oc start-build cmsswgraphviz --from-dir=. --follow
 oc new-app cmsswgraphviz
 ```
+
+Use Docker strategy for deployments with the CERN EOS pod annotation. That
+annotation mounts an `emptyDir` over `/tmp`; classic S2I startup commands that
+execute `/tmp/scripts/run` will then fail because the script is hidden by the
+mount. The included `Dockerfile` starts
+`/opt/app-root/src/.s2i/bin/run` directly.
 
 At runtime `.s2i/bin/run` executes:
 

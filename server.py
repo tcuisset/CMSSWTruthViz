@@ -16,6 +16,7 @@ import threading
 import time
 import shutil
 import uuid
+import traceback
 from pathlib import Path
 from urllib.parse import urlparse
 import cgi
@@ -66,6 +67,44 @@ def set_build_status(**updates):
     """Update the current background bundle build state."""
     with BUILD_STATUS_LOCK:
         BUILD_STATUS.update(updates)
+
+
+def print_cmssw_build_diagnostics(input_root, options, exc):
+    """Print detailed server-side diagnostics for CMSSW ROOT processing failures."""
+    print("\nCMSSW ROOT processing failed")
+    print(f"  exception: {type(exc).__name__}: {exc}")
+    print(f"  input_root: {input_root}")
+    print(f"  job_id: {options.job_id}")
+    print(f"  event_index: {options.event_index}")
+    print(f"  job_root: {options.job_root}")
+    print(f"  cmssw_src: {options.cmssw_src}")
+    print(f"  cmsrun_timeout: {options.cmsrun_timeout}")
+    print(f"  cmsrun_wrapper: {options.cmsrun_wrapper or os.environ.get('TRUTHVIZ_CMSRUN_WRAPPER')}")
+    print(f"  dumper_args: {options.dumper_args}")
+    for name in (
+        "TRUTHVIZ_CMSSW_SRC",
+        "TRUTHVIZ_JOB_ROOT",
+        "TRUTHVIZ_CMSRUN_WRAPPER",
+        "TRUTHVIZ_CMSRUN_TIMEOUT_SEC",
+        "CMSSW_BASE",
+        "SCRAM_ARCH",
+        "CMSSET_DEFAULT",
+    ):
+        value = os.environ.get(name)
+        if value:
+            print(f"  env {name}: {value}")
+    if isinstance(exc, subprocess.TimeoutExpired):
+        print(f"  timeout_seconds: {exc.timeout}")
+        print(f"  command: {exc.cmd}")
+        if exc.output:
+            print("  stdout before timeout:")
+            print(str(exc.output)[-4000:])
+        if exc.stderr:
+            print("  stderr before timeout:")
+            print(str(exc.stderr)[-4000:])
+    print("  traceback:")
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+    print("")
 
 
 def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_index=0):
@@ -195,7 +234,8 @@ def run_cmssw_build(input_root, options):
             finishedAt=time.time(),
             outputs=result.as_dict(),
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        print_cmssw_build_diagnostics(input_root, options, exc)
         set_build_status(
             state="error",
             phase="timeout",
@@ -204,7 +244,7 @@ def run_cmssw_build(input_root, options):
             finishedAt=time.time(),
         )
     except Exception as exc:
-        print(f"  ERROR: {str(exc)}")
+        print_cmssw_build_diagnostics(input_root, options, exc)
         set_build_status(
             state="error",
             phase="error",

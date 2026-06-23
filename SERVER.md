@@ -224,7 +224,7 @@ The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
 - `TRUTHVIZ_CMSSW_INSTALL_SCRIPT`: CMSSW install script used at S2I runtime,
   default `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh`.
 
-In OpenShift, use the included `Containerfile` based on `cmssw/el9:x86_64`.
+In OpenShift, use the included `Dockerfile` based on `cmssw/el9:x86_64`.
 Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and uses direct
 `scram`/`cmsRun` in that EL9 container.
 The S2I runtime hook installs CMSSW into the writable volume on first startup

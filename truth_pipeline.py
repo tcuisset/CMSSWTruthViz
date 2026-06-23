@@ -288,8 +288,10 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         viewer_bundle_path.parent.mkdir(parents=True, exist_ok=True)
         viewer_bundle_js_path.parent.mkdir(parents=True, exist_ok=True)
 
-        shutil.copy2(bundle_path, viewer_bundle_path)
-        shutil.copy2(rechits_json_path, viewer_rechits_path)
+        # OpenShift volumes may reject chmod/copymode even when writes are allowed.
+        # copyfile copies bytes only, unlike copy/copy2.
+        shutil.copyfile(bundle_path, viewer_bundle_path)
+        shutil.copyfile(rechits_json_path, viewer_rechits_path)
         run_checked(
             [
                 sys.executable,

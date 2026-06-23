@@ -1,9 +1,11 @@
 # OpenShift Deployment
 
-The recommended OpenShift deployment uses the included `Containerfile`, based on
+The recommended OpenShift deployment uses the included `Dockerfile`, based on
 `cmssw/el9:x86_64`. This avoids nested Singularity/Apptainer: the Python server
 and `cmsRun` run in the same EL9-compatible container, and CMSSW is installed
-into a writable PVC at runtime. More general setup notes are in [INSTALL.md](INSTALL.md).
+into a writable PVC at runtime. `Containerfile` is kept with the same contents
+for local Podman/Docker workflows. More general setup notes are in
+[INSTALL.md](INSTALL.md).
 
 Build from the `CMSSWGraphViz` repository root with Docker strategy:
 
@@ -11,6 +13,27 @@ Build from the `CMSSWGraphViz` repository root with Docker strategy:
 oc new-build --strategy=docker --binary --name=cmssw-truth-viz-dev
 oc start-build cmssw-truth-viz-dev --from-dir=. --follow
 oc new-app cmsswgraphviz
+```
+
+Do not use the classic OpenShift source/S2I launch path for pods that also use
+the CERN EOS annotation
+`eos.okd.cern.ch/mount-eos-with-credentials-from-secret`. That annotation mounts
+an `emptyDir` over `/tmp` so Kerberos credentials can be shared between the init,
+sidecar, and application containers. Classic S2I images commonly start the app
+through `/tmp/scripts/run`; the EOS `/tmp` mount hides that generated script and
+the pod fails with:
+
+```text
+/bin/sh: line 1: /tmp/scripts/run: No such file or directory
+```
+
+The included `Dockerfile` avoids this by baking the app into
+`/opt/app-root/src` and using `/opt/app-root/src/.s2i/bin/run` as the image
+command. If an existing Deployment still has a command such as
+`/tmp/scripts/run`, override it to the checked-in script path:
+
+```bash
+oc set command deployment/cmsswgraphviz -- /opt/app-root/src/.s2i/bin/run
 ```
 
 For `/process-root` and catalogue samples, the runtime environment must provide:
