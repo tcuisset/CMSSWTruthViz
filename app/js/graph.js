@@ -254,7 +254,6 @@ const GraphManager = {
     },
 
     getNodeFillColor(ele) {
-        if (this.hasStatusOne(ele)) return this.statusOneNodeColor;
 
         const type = this.getNodeKind(ele);
         if (type.startsWith('GenSim')) return this.nodeTypeColors.genSim;
@@ -262,6 +261,8 @@ const GraphManager = {
         if (type.startsWith('Gen')) return this.nodeTypeColors.gen;
         if (type.startsWith('Sim')) return this.nodeTypeColors.sim;
 
+        if (this.hasStatusOne(ele)) return this.statusOneNodeColor;
+        
         const fillcolor = ele.data('fillcolor');
         if (fillcolor === 'green') return '#2ecc71';
         if (fillcolor === 'lightgrey') return '#d3d3d3';
