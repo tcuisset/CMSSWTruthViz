@@ -164,11 +164,18 @@ The status object also includes `phase`, `jobId`, and `outputs` when available.
 
 CMSSW input mode. Accepts multipart form fields:
 
-- `rootFile`: required CMSSW EDM ROOT file.
+- `source`: optional input source, either `upload` or `path`, default `upload`.
+- `rootFile`: required CMSSW EDM ROOT file when `source=upload`.
+- `rootPath`: required server-side CMSSW EDM ROOT file path when `source=path`.
 - `eventIndex`: optional non-negative integer, default `0`.
 - `dumperArgs`: optional extra arguments passed to `dumpTruthGraphsFromGENSIMRECO_cfg.py`.
 
-The server stores the upload under `TRUTHVIZ_JOB_ROOT`, runs:
+For `source=path`, the path must be under `/eos/` by default. The UI describes
+the intended OpenShift usage: CERN EOS files in `/eos/user` or `/eos/cms` shared
+with the `tb18clue3d` user. For local development tests without `/eos` mounted,
+set `TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1` to allow absolute local paths.
+
+The server stores browser uploads under `TRUTHVIZ_JOB_ROOT`, then runs:
 
 ```bash
 cmsRun PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py <input.root> -n 1 --skipEvents <eventIndex> -o <job>/cmssw

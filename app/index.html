@@ -237,9 +237,25 @@
                         </label>
                     </div>
                     <div class="form-group cmssw-input-group">
+                        <label>CMSSW ROOT source:</label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="cmssw-root-source" value="upload" checked>
+                            Upload from browser
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="cmssw-root-source" value="path">
+                            Open EOS path
+                        </label>
+                    </div>
+                    <div class="form-group cmssw-input-group">
                         <label for="cmssw-root-file-input">CMSSW EDM ROOT file:</label>
                         <input type="file" id="cmssw-root-file-input" accept=".root">
                         <span class="file-info" id="cmssw-root-file-info">No file selected</span>
+                    </div>
+                    <div class="form-group cmssw-input-group cmssw-root-path-group">
+                        <label for="cmssw-root-path-input">CERN EOS path:</label>
+                        <input type="text" id="cmssw-root-path-input" placeholder="/eos/user/.../input.root">
+                        <span class="file-info">Use a CMSSW EDM ROOT file on CERN EOS (/eos/user or /eos/cms) shared with the tb18clue3d user.</span>
                     </div>
                     <div class="form-group cmssw-input-group">
                         <label for="event-index-input">Event number:</label>

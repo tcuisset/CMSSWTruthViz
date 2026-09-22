@@ -7,8 +7,10 @@ const UploadManager = {
     modal: null,
     form: null,
     modeInputs: null,
+    cmsswRootSourceInputs: null,
     cmsswRootFileInput: null,
     cmsswRootFileInfo: null,
+    cmsswRootPathInput: null,
     eventIndexInput: null,
     dumperArgsInput: null,
     dotFileInput: null,
@@ -30,8 +32,10 @@ const UploadManager = {
         this.modal = document.getElementById('upload-modal');
         this.form = document.getElementById('upload-form');
         this.modeInputs = Array.from(document.querySelectorAll('input[name="input-mode"]'));
+        this.cmsswRootSourceInputs = Array.from(document.querySelectorAll('input[name="cmssw-root-source"]'));
         this.cmsswRootFileInput = document.getElementById('cmssw-root-file-input');
         this.cmsswRootFileInfo = document.getElementById('cmssw-root-file-info');
+        this.cmsswRootPathInput = document.getElementById('cmssw-root-path-input');
         this.eventIndexInput = document.getElementById('event-index-input');
         this.dumperArgsInput = document.getElementById('dumper-args-input');
         this.dotFileInput = document.getElementById('dot-file-input');
@@ -78,6 +82,9 @@ const UploadManager = {
         this.modeInputs.forEach(input => {
             input.addEventListener('change', () => this.updateModeVisibility());
         });
+        this.cmsswRootSourceInputs.forEach(input => {
+            input.addEventListener('change', () => this.updateCmsswSourceVisibility());
+        });
 
         // File input changes
         this.cmsswRootFileInput.addEventListener('change', (e) => {
@@ -122,6 +129,7 @@ const UploadManager = {
     resetForm() {
         this.form.reset();
         this.cmsswRootFileInfo.textContent = 'No file selected';
+        this.cmsswRootPathInput.value = '';
         this.dotFileInfo.textContent = 'No file selected';
         this.rootFileInfo.textContent = 'No file selected';
         this.eventIndexInput.value = '0';
@@ -130,6 +138,7 @@ const UploadManager = {
         this.uploadProgress.classList.add('hidden');
         this.submitBtn.disabled = false;
         this.updateModeVisibility();
+        this.updateCmsswSourceVisibility();
         this.updateSampleInfo();
     },
 
@@ -210,11 +219,18 @@ const UploadManager = {
     },
 
     async handleCmsswRootUpload() {
+        const source = this.getCmsswRootSource();
         const rootFile = this.cmsswRootFileInput.files[0];
+        const rootPath = this.cmsswRootPathInput.value.trim();
         const eventIndex = this.parseNonNegativeInteger(this.eventIndexInput.value);
 
-        if (!rootFile) {
+        if (source === 'upload' && !rootFile) {
             alert('Please select a CMSSW EDM ROOT file');
+            return;
+        }
+
+        if (source === 'path' && !rootPath) {
+            alert('Please enter a CERN EOS path');
             return;
         }
 
@@ -224,11 +240,18 @@ const UploadManager = {
         }
 
         this.uploadProgress.classList.remove('hidden');
-        this.uploadStatus.textContent = 'Uploading CMSSW ROOT file...';
+        this.uploadStatus.textContent = source === 'path'
+            ? 'Starting CMSSW ROOT processing from EOS path...'
+            : 'Uploading CMSSW ROOT file...';
         this.submitBtn.disabled = true;
 
         const formData = new FormData();
-        formData.append('rootFile', rootFile);
+        formData.append('source', source);
+        if (source === 'path') {
+            formData.append('rootPath', rootPath);
+        } else {
+            formData.append('rootFile', rootFile);
+        }
         formData.append('eventIndex', String(eventIndex));
         if (this.dumperArgsInput.value.trim()) {
             formData.append('dumperArgs', this.dumperArgsInput.value.trim());
@@ -240,7 +263,10 @@ const UploadManager = {
         });
 
         const result = await this.parseJsonResponse(response, 'CMSSW ROOT processing');
-        await this.finishStartedProcessing(result, 'Upload complete. Running cmsRun...');
+        await this.finishStartedProcessing(
+            result,
+            source === 'path' ? 'Processing EOS file with cmsRun...' : 'Upload complete. Running cmsRun...'
+        );
     },
 
     async handleSampleProcessing() {
@@ -347,6 +373,11 @@ const UploadManager = {
         return selected ? selected.value : 'cmssw';
     },
 
+    getCmsswRootSource() {
+        const selected = this.cmsswRootSourceInputs.find(input => input.checked);
+        return selected ? selected.value : 'upload';
+    },
+
     updateModeVisibility() {
         const mode = this.getMode();
         const cmsswGroups = Array.from(document.querySelectorAll('.cmssw-input-group'));
@@ -361,6 +392,17 @@ const UploadManager = {
         preparedGroups.forEach(group => group.classList.toggle('hidden', mode !== 'prepared'));
         sampleGroups.forEach(group => group.classList.toggle('hidden', mode !== 'sample'));
         this.submitBtn.textContent = mode === 'sample' ? 'Process Sample' : 'Upload & Process';
+        this.updateCmsswSourceVisibility();
+    },
+
+    updateCmsswSourceVisibility() {
+        const mode = this.getMode();
+        const source = this.getCmsswRootSource();
+        const fileGroup = this.cmsswRootFileInput.closest('.form-group');
+        const pathGroup = this.cmsswRootPathInput.closest('.form-group');
+
+        fileGroup.classList.toggle('hidden', mode !== 'cmssw' || source !== 'upload');
+        pathGroup.classList.toggle('hidden', mode !== 'cmssw' || source !== 'path');
     },
 
     async loadSamples() {

@@ -69,6 +69,38 @@ def set_build_status(**updates):
         BUILD_STATUS.update(updates)
 
 
+def truthy_env(name):
+    """Return whether an environment variable is set to a truthy value."""
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_cmssw_root_server_path(raw_path):
+    """Validate a server-side CMSSW ROOT path selected from the upload modal."""
+    root_path_text = str(raw_path or "").strip()
+    if not root_path_text:
+        raise ValueError("CMSSW ROOT path is required")
+
+    root_path = Path(root_path_text).expanduser()
+    if not root_path.is_absolute():
+        raise ValueError("CMSSW ROOT path must be absolute")
+
+    is_eos_path = root_path_text.startswith("/eos/")
+    allow_local_paths = truthy_env("TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS")
+    if not is_eos_path and not allow_local_paths:
+        raise ValueError(
+            "CMSSW ROOT path must be under /eos/. "
+            "Set TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1 for local development tests."
+        )
+
+    root_path = root_path.resolve()
+    if not root_path.exists():
+        raise ValueError(f"CMSSW ROOT path does not exist: {root_path}")
+    if not root_path.is_file():
+        raise ValueError(f"CMSSW ROOT path is not a file: {root_path}")
+
+    return root_path
+
+
 def print_cmssw_build_diagnostics(input_root, options, exc):
     """Print detailed server-side diagnostics for CMSSW ROOT processing failures."""
     print("\nCMSSW ROOT processing failed")
@@ -407,8 +439,14 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 environ={'REQUEST_METHOD': 'POST'}
             )
 
+            source = self.get_form_value(form, 'source', 'upload')
+            if source not in {'upload', 'path'}:
+                self.send_json_response({'success': False, 'error': 'source must be upload or path'}, 400)
+                return
+
             root_item = self.get_upload_item(form, 'rootFile')
-            if root_item is None:
+            root_path_value = self.get_form_value(form, 'rootPath', '')
+            if source == 'upload' and root_item is None:
                 self.send_json_response({'success': False, 'error': 'CMSSW ROOT file is required'}, 400)
                 return
 
@@ -428,12 +466,20 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             project_root = Path(__file__).parent
             job_root = default_job_root(project_root)
-            job_id = f"{int(time.time())}-upload-{uuid.uuid4().hex[:8]}"
-            upload_dir = job_root / job_id / "upload"
-            upload_dir.mkdir(parents=True, exist_ok=False)
-            root_path = upload_dir / "input.root"
-            with open(root_path, 'wb') as f:
-                shutil.copyfileobj(root_item.file, f)
+            job_id_prefix = "path" if source == "path" else "upload"
+            job_id = f"{int(time.time())}-{job_id_prefix}-{uuid.uuid4().hex[:8]}"
+            if source == 'path':
+                try:
+                    root_path = resolve_cmssw_root_server_path(root_path_value)
+                except ValueError as exc:
+                    self.send_json_response({'success': False, 'error': str(exc)}, 400)
+                    return
+            else:
+                upload_dir = job_root / job_id / "upload"
+                upload_dir.mkdir(parents=True, exist_ok=False)
+                root_path = upload_dir / "input.root"
+                with open(root_path, 'wb') as f:
+                    shutil.copyfileobj(root_item.file, f)
 
             options = PipelineOptions(
                 event_index=event_index,
@@ -446,7 +492,11 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
                 state="queued",
                 phase="cmssw",
                 jobId=job_id,
-                message="CMSSW ROOT file uploaded. Processing is starting...",
+                message=(
+                    "CMSSW ROOT file found on server path. Processing is starting..."
+                    if source == "path"
+                    else "CMSSW ROOT file uploaded. Processing is starting..."
+                ),
                 startedAt=time.time(),
                 finishedAt=None,
                 outputs=None,
