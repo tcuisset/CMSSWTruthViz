@@ -37,7 +37,7 @@ def parse_args():
         "--cmssw-src",
         type=Path,
         default=None,
-        help="CMSSW src directory. Defaults to TRUTHVIZ_CMSSW_SRC, CMSSW_BASE/src, or sibling CMSSW_20_1_X_2026-06-20-1100/src.",
+        help="CMSSW src directory. Defaults to TRUTHVIZ_CMSSW_SRC, CMSSW_BASE/src, or sibling CMSSW_20_1_0_pre3/src.",
     )
     parser.add_argument(
         "--job-root",

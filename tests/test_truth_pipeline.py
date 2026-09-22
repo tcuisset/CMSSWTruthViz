@@ -13,6 +13,9 @@ from truth_pipeline import PipelineOptions
 
 
 class TruthPipelineTests(unittest.TestCase):
+    def test_default_cmssw_release_is_regular_pre3(self):
+        self.assertEqual(truth_pipeline.DEFAULT_CMSSW_RELEASE, "CMSSW_20_1_0_pre3")
+
     def test_cmsrun_wrapper_config_sets_skip_events(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

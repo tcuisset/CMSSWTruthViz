@@ -65,7 +65,7 @@ To generate viewer inputs directly from a CMSSW EDM ROOT file:
 
 This requires a CMSSW runtime with the TruthInfo plugins available. The script
 uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, or the sibling
-`CMSSW_20_1_X_2026-06-20-1100/src` checkout.
+`CMSSW_20_1_0_pre3/src` checkout.
 
 ## Static Mode
 

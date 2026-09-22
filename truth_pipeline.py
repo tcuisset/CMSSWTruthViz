@@ -24,7 +24,7 @@ from urllib.request import urlretrieve
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_CMSSW_RELEASE = os.environ.get("TRUTHVIZ_CMSSW_RELEASE", "CMSSW_20_1_0_pre2")
+DEFAULT_CMSSW_RELEASE = os.environ.get("TRUTHVIZ_CMSSW_RELEASE", "CMSSW_20_1_0_pre3")
 DEFAULT_CMSSW_SRC = PROJECT_ROOT.parent / DEFAULT_CMSSW_RELEASE / "src"
 
 

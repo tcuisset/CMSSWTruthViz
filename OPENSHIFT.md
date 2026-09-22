@@ -43,11 +43,11 @@ For `/process-root` and catalogue samples, the runtime environment must provide:
 
 At runtime, `.s2i/bin/run`:
 
-- looks for an existing `CMSSW_*/src` under `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
+- looks for the configured release under `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
 - otherwise sources `/cvmfs/cms.cern.ch/cmsset_default.sh`,
-- runs `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh` in
-  `TRUTHVIZ_CMSSW_INSTALL_ROOT`,
-- exports `TRUTHVIZ_CMSSW_SRC` to the installed `CMSSW_*/src`,
+- creates a regular `CMSSW_20_1_0_pre3` project with `scram project`,
+- links the release's `PhysicsTools/TruthInfo` source into the project and exports
+  `TRUTHVIZ_CMSSW_SRC` to its `src` directory,
 - uses direct `scram`/`cmsRun` in the EL9 container.
 
 By default, `TRUTHVIZ_CMSSW_INSTALL_ROOT` is derived from `TRUTHVIZ_JOB_ROOT`:
@@ -80,11 +80,12 @@ Useful runtime configuration:
 ```bash
 TRUTHVIZ_JOB_ROOT=/persistent/jobs
 TRUTHVIZ_CMSSW_INSTALL_ROOT=/persistent/cmssw
+TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_0_pre3
+TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14
 TRUTHVIZ_CATALOG=/opt/app-root/src/samples/catalog.json
 TRUTHVIZ_MAX_UPLOAD_MB=2048
 TRUTHVIZ_CMSRUN_TIMEOUT_SEC=3600
 CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh
-TRUTHVIZ_CMSSW_INSTALL_SCRIPT=/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh
 TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only when TRUTHVIZ_CMSSW_SRC/CMSSW_BASE is provided another way
 ```
 

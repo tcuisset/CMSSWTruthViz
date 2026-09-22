@@ -33,13 +33,13 @@ CMSSW `src` directory in this order:
 3. `CMSSW_BASE/src`
 4. the sibling release directory of this checkout
 
-The sibling release name defaults to `CMSSW_20_1_0_pre2` and is overridden with
+The sibling release name defaults to `CMSSW_20_1_0_pre3` and is overridden with
 `TRUTHVIZ_CMSSW_RELEASE`. Put the viewer checkout and the CMSSW area side by side to
 use the default:
 
 ```text
 <work area>/
-├── CMSSW_20_1_0_pre2/src/
+├── CMSSW_20_1_0_pre3/src/
 └── CMSSWTruthViz/
 ```
 
@@ -175,8 +175,8 @@ export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
 source /cvmfs/cms.cern.ch/cmsset_default.sh
 ```
 
-then runs `/cvmfs/cms-ci.cern.ch/week0/cms-sw/cmssw/51213/54154/install.sh` in
-`TRUTHVIZ_CMSSW_INSTALL_ROOT` when no existing `CMSSW_*/src` is found. In the
+then creates a regular `CMSSW_20_1_0_pre3` project with SCRAM in
+`TRUTHVIZ_CMSSW_INSTALL_ROOT` when that release is not installed. In the
 recommended `cmssw/el9:x86_64` image, `cmsRun` runs directly through
 `scram runtime -sh`. Set `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` to override runtime
 install.
