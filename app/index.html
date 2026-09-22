@@ -9,13 +9,15 @@
 <body>
     <div id="app">
         <!-- Header Controls -->
+        <button id="controls-toggle" type="button" aria-expanded="true"
+                title="Hide or show the control bar (press H)">Hide controls</button>
         <div id="controls">
             <div class="controls-section">
                 <h1>Truth Graph Viewer</h1>
             </div>
 
-            <div class="controls-section">
-                <div class="control-group">
+            <div class="controls-section" id="main-controls">
+                <div class="control-group" id="search-controls">
                     <label for="search-input">Search:</label>
                     <input type="text" id="search-input" placeholder="Search node labels..." />
                     <button id="search-btn">Find</button>
@@ -58,16 +60,17 @@
                         <option value="dagre" selected>Dagre</option>
                         <option value="fcose">fCoSE</option>
                         <option value="elk">ELK</option>
+                        <option value="forceatlas2">ForceAtlas2</option>
                     </select>
                     <button id="layout-apply-btn" class="apply-btn" type="button" title="Apply layout to currently visible nodes">✓</button>
                 </div>
 
                 <div class="control-group">
-                    <label class="checkbox-label" for="hide-gen-event-checkbox">
+                    <label class="checkbox-label gensim-only" for="hide-gen-event-checkbox">
                         <input type="checkbox" id="hide-gen-event-checkbox" />
                         Hide GenEvent
                     </label>
-                    <label class="checkbox-label" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
+                    <label class="checkbox-label gensim-only" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
                         <input type="checkbox" id="hide-simvertex-key0-checkbox" />
                         Hide SimVertex key=0
                     </label>
@@ -76,9 +79,53 @@
                         Hide parton shower
                     </label>
                     <label class="checkbox-label" for="hide-small-subgraphs-checkbox" title="Hide disconnected graph components with fewer than 10 total nodes">
-                        <input type="checkbox" id="hide-small-subgraphs-checkbox" checked />
+                        <input type="checkbox" id="hide-small-subgraphs-checkbox" />
                         Hide subgraphs &lt;10 nodes
                     </label>
+                    <label class="checkbox-label truth-only" for="hide-pileup-checkbox" title="Hide everything that is not the signal interaction, that is bunch crossing 0 and event 0">
+                        <input type="checkbox" id="hide-pileup-checkbox" />
+                        Hide pile-up
+                    </label>
+                    <label class="checkbox-label truth-only" for="hide-underlying-event-checkbox" title="Hide particles carrying the underlyingEvent level and the artificial underlying-event vertex">
+                        <input type="checkbox" id="hide-underlying-event-checkbox" />
+                        Hide underlying event
+                    </label>
+                    <label class="checkbox-label truth-only" for="hide-zero-simhits-checkbox" title="Hide a particle whose whole subgraph leaves no sim hit in any channel">
+                        <input type="checkbox" id="hide-zero-simhits-checkbox" />
+                        Hide subgraphs with 0 sim hits
+                    </label>
+                    <label class="checkbox-label truth-only" for="energy-threshold-input" title="Hide particles whose energy is below this value">
+                        Hide E &lt;
+                        <input type="number" id="energy-threshold-input" min="0" step="0.1" value="0" />
+                        GeV
+                    </label>
+                    <div class="truth-only" id="level-filter">
+                        <div class="level-filter-title">
+                            Levels shown
+                            <button id="level-filter-all" type="button">all</button>
+                            <button id="level-filter-none" type="button">none</button>
+                        </div>
+                        <div id="level-filter-items"></div>
+                    </div>
+                    <div class="filter-note truth-only" id="filter-status"></div>
+                    <div id="working-point-control" class="hidden">
+                        <label class="checkbox-label" for="show-reco-checkbox" title="Show or hide the reco objects and their match edges">
+                            <input type="checkbox" id="show-reco-checkbox" checked />
+                            Show reco objects
+                        </label>
+                        <div class="level-filter-title">Association working point</div>
+                        <div id="working-point-items"></div>
+                        <div class="filter-note" id="working-point-status"></div>
+                        <div class="filter-note">
+                            Fixed is the plain per-root match. The adaptive points let the
+                            match climb to a broader branch, bounded by how much of that
+                            branch the reco object leaves unexplained.
+                        </div>
+                    </div>
+                    <div class="filter-note truth-only">
+                        Hiding always collapses: the visible parents of a hidden node
+                        are joined to its visible children, so nothing is orphaned.
+                    </div>
                 </div>
             </div>
 
@@ -109,47 +156,148 @@
 
                 <!-- Legend -->
                 <div id="legend">
-                    <div class="legend-title">Node Type</div>
-                    <div class="legend-item">
-                        <div class="legend-color legend-star" style="background: #f1c40f;"></div>
-                        <span>GenEvent</span>
+                    <button id="legend-toggle" type="button" aria-expanded="true"
+                            title="Collapse or expand the legend">Legend</button>
+                    <div id="legend-body">
+                    <!-- Truth graph. The logical graph is standalone, so a node is
+                         described by its own level, footprint and role. -->
+                    <div id="legend-truth">
+                        <div class="legend-title">Node kind</div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-ellipse" style="background: #92dadd;"></div>
+                            <span>particle</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-diamond" style="background: #d9d9d9;"></div>
+                            <span>vertex</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-star" style="background: #ffa90e;"></div>
+                            <span>hard interaction <em>(artificial)</em></span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-pentagon" style="background: #a96b59;"></div>
+                            <span>initial state <em>(artificial)</em></span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-rhomboid" style="background: #b9ac70;"></div>
+                            <span>beam side input <em>(artificial)</em></span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-rounded" style="background: #94a4a2;"></div>
+                            <span>underlying event <em>(artificial)</em></span>
+                        </div>
+
+                        <div class="legend-title" style="margin-top: 10px;">Truth level (fill)</div>
+                        <div id="legend-levels"></div>
+                        <div class="legend-note" style="font-size: 11px; margin-top: 4px;">
+                            A particle carries several levels. The fill shows the most
+                            signal-like one; hover shows them all.
+                        </div>
+
+                        <div class="legend-title" style="margin-top: 10px;">Hit footprint (border)</div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-thick"></div>
+                            <span>calo rec hits</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-medium"></div>
+                            <span>calo sim hits only</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-thin"></div>
+                            <span>tracker, MTD or muon only</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-dashed"></div>
+                            <span>no hits</span>
+                        </div>
+
+                        <div class="legend-title" style="margin-top: 10px;">Reco overlay</div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-rounded" style="background: #0d7d8c;"></div>
+                            <span>trackster</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-match-edge"></div>
+                            <span>match at the selected working point</span>
+                        </div>
+                        <div class="legend-note" style="font-size: 11px; margin-top: 4px;">
+                            Edge width grows with the shared energy of the match.
+                        </div>
+
+                        <div class="legend-title" style="margin-top: 10px;">Markers</div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-double"></div>
+                            <span>root of a selected branch</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-checkpoint"></div>
+                            <span>has checkpoints</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-border-backscattered"></div>
+                            <span>backscattered</span>
+                        </div>
+                        <div class="legend-note" style="font-size: 11px; margin-top: 4px;">
+                            Labels carry the particle name or PDG id and its energy, and
+                            the vertex reason. Hover a node for the rest.
+                        </div>
+                        <div class="legend-note" style="font-size: 11px; margin-top: 4px;">
+                            Edges: <span style="color:#ee0000;font-weight:bold;">&#9473; signal</span>,
+                            <span style="color:#0000ff;">&#9473; underlying event</span>,
+                            <span style="color:#333;">&#9548; rest</span>.
+                        </div>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-color legend-diamond" style="background: #2e86de;"></div>
-                        <span>GenVertex</span>
+
+                    <!-- Raw gen plus sim graph. Kept for truthgraph.dot, where GEN and
+                         SIM provenance is still the subject. -->
+                    <div id="legend-gensim" class="hidden">
+                        <div class="legend-title">Node Type</div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-star" style="background: #f1c40f;"></div>
+                            <span>GenEvent</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-diamond" style="background: #2e86de;"></div>
+                            <span>GenVertex</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #2e86de;"></div>
+                            <span>GenParticle</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-diamond" style="background: #e67e22;"></div>
+                            <span>SimVertex</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #e67e22;"></div>
+                            <span>SimTrack</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-gen-sim" style="background: #2ecc71;"></div>
+                            <span>Gen+Sim</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ff9285;"></div>
+                            <span>status=1</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-crossed" style="background: white;"></div>
+                            <span>crossedBoundary=true</span>
+                        </div>
+                        <div class="legend-note" style="font-size: 11px; margin-top: 8px;">
+                            Node text is built from DOT attributes.
+                        </div>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #2e86de;"></div>
-                        <span>GenParticle</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color legend-diamond" style="background: #e67e22;"></div>
-                        <span>SimVertex</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #e67e22;"></div>
-                        <span>SimTrack</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color legend-gen-sim" style="background: #2ecc71;"></div>
-                        <span>Gen+Sim</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #ff9285;"></div>
-                        <span>status=1</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color legend-crossed" style="background: white;"></div>
-                        <span>crossedBoundary=true</span>
-                    </div>
-                    <div class="legend-note" style="font-size: 11px; margin-top: 8px;">
-                        Node text is built from DOT attributes.
-                    </div>
+
                     <div class="legend-note">
-                        ⌨️ <strong>Keyboard:</strong><br>
-                        • ↑↓←→ Navigate | Enter: Details<br>
-                        • Tab: Cycle | Esc: Close | R: Reset<br>
-                        • ? for help
+                        &#9000; <strong>Keyboard:</strong><br>
+                        &bull; &uarr;&darr;&larr;&rarr; Navigate | Enter: Details<br>
+                        &bull; Tab: Cycle | Esc: Close | R: Reset<br>
+                        &bull; H: Hide or show the control bar<br>
+                        &bull; ? for help
+                    </div>
                     </div>
                 </div>
             </div>
@@ -187,6 +335,10 @@
                         </div>
                     </div>
 
+                    <div id="raw-snippet-section" class="section">
+                        <h3>Rendered DOT Label</h3>
+                        <div id="raw-snippet"></div>
+                    </div>
                     <div id="connected-towards-section" class="section">
                         <h3>Ancestors</h3>
                         <div id="connected-towards-list" class="connected-node-list"></div>
@@ -197,11 +349,10 @@
                         <div id="connected-away-list" class="connected-node-list"></div>
                     </div>
 
-                    <div id="raw-snippet-section" class="section">
-                        <h3>Rendered DOT Label</h3>
-                        <div id="raw-snippet"></div>
+                    <div id="matched-reco-section" class="section hidden">
+                        <h3>Association matches</h3>
+                        <div id="matched-reco-list" class="connected-node-list"></div>
                     </div>
-
                     <div id="parameters-section" class="section">
                         <h3>DOT Attributes</h3>
                         <div id="parameters-list"></div>
@@ -263,7 +414,7 @@
                     </div>
                     <div class="form-group cmssw-input-group">
                         <label for="dumper-args-input">Extra dumper arguments:</label>
-                        <input type="text" id="dumper-args-input" placeholder="e.g. --no-keepSpectators -s 23">
+                        <input type="text" id="dumper-args-input" placeholder="e.g. --geometry ExtendedRun4D120 --no-keepSpectators">
                     </div>
                     <div class="form-group">
                         <label for="dot-file-input">Graph (truthgraph.dot):</label>
@@ -302,23 +453,25 @@
     </div>
 
     <!-- JavaScript Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="vendor/cytoscape.min.js"></script>
+    <script src="vendor/dagre.min.js"></script>
+    <script src="vendor/cytoscape-dagre.min.js"></script>
+    <script src="vendor/layout-base.min.js"></script>
+    <script src="vendor/cose-base.min.js"></script>
+    <script src="vendor/cytoscape-fcose.min.js"></script>
+    <script src="vendor/elk.bundled.js"></script>
+    <script src="vendor/cytoscape-elk.js"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
+    <script src="vendor/plotly-2.35.2.min.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
     <script src="js/bundle.js"></script>
     <script src="js/rechits.js"></script>
+    <script src="js/associations.js"></script>
 
     <!-- Application Scripts -->
     <script src="js/utils.js"></script>
+    <script src="js/forceatlas2.js"></script>
     <script src="js/graph.js"></script>
     <script src="js/panel.js"></script>
     <script src="js/plot3d.js"></script>

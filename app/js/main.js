@@ -55,6 +55,8 @@ async function initApp() {
             });
         }
 
+        await attachAssociationData();
+
         // Initialize graph
         GraphManager.init(window.bundleData);
 
@@ -154,3 +156,32 @@ function updateStats(stats) {
 
 // Start application when DOM is ready
 document.addEventListener('DOMContentLoaded', initApp);
+
+/**
+ * Load the reco to truth-branch associations if the job produced them. A graph dumped
+ * without the associators simply has no file, which is not an error.
+ */
+async function attachAssociationData() {
+    // A page opened as a file cannot fetch, so the generated associations.js is used
+    // when it is there; the server path still reads the JSON, which is always current.
+    if (isStaticMode() && window.EMBEDDED_ASSOCIATION_DATA) {
+        window.associationData = window.EMBEDDED_ASSOCIATION_DATA;
+        console.log('Associations loaded from the embedded file:',
+                    window.associationData.recoObjects?.length || 0, 'reco objects');
+        return;
+    }
+
+    try {
+        const response = await fetch('../data/associations.json');
+        if (!response.ok) return;
+        window.associationData = await response.json();
+        console.log('Associations loaded:', window.associationData.recoObjects?.length || 0, 'reco objects');
+    } catch (error) {
+        if (window.EMBEDDED_ASSOCIATION_DATA) {
+            window.associationData = window.EMBEDDED_ASSOCIATION_DATA;
+            console.log('Associations loaded from the embedded file after a failed fetch');
+            return;
+        }
+        console.log('No association data:', error.message);
+    }
+}

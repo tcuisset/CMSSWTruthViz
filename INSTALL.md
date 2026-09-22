@@ -4,8 +4,8 @@ This repository is a Python-assisted static web app. The frontend has no npm bui
 
 ## Requirements
 
-- Python 3.9 or newer recommended.
-- Python `venv` support.
+- Python 3.9 or newer. Verified on 3.12 and on 3.13.
+- Python `venv` support. On Debian and Ubuntu this is the `python3-venv` package.
 - A modern browser such as Chrome or Firefox.
 - Network access from the browser for CDN libraries unless those scripts are vendored locally.
 - A Graphviz DOT truth graph, usually `truthgraph.dot`.
@@ -14,13 +14,34 @@ This repository is a Python-assisted static web app. The frontend has no npm bui
 Python packages:
 
 ```text
-pydot
 networkx
 particle
 uproot
 ```
 
-Graphviz command-line tools are useful for validating DOT files, but the current preprocessing path parses DOT with `pydot`.
+Graphviz command-line tools are useful for validating DOT files and for rendering a
+graph to PDF. The preprocessing reads the DOT itself, with `preprocess/dot_reader.py`.
+
+## CMSSW Area
+
+The ROOT processing pipeline runs `cmsRun` on
+`PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py`. It looks for the
+CMSSW `src` directory in this order:
+
+1. the `--cmssw-src` option of `visualizeTruthGraph`
+2. `TRUTHVIZ_CMSSW_SRC`
+3. `CMSSW_BASE/src`
+4. the sibling release directory of this checkout
+
+The sibling release name defaults to `CMSSW_20_1_0_pre2` and is overridden with
+`TRUTHVIZ_CMSSW_RELEASE`. Put the viewer checkout and the CMSSW area side by side to
+use the default:
+
+```text
+<work area>/
+├── CMSSW_20_1_0_pre2/src/
+└── CMSSWTruthViz/
+```
 
 ## Quick Local Run
 

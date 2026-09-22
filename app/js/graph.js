@@ -16,10 +16,21 @@ const GraphManager = {
     fcoseRegistered: false,
     elkRegistered: false,
     graphName: '',
-    hideGenEventNodes: true,
-    hideSimVertexKey0Node: true,
+    // Every filter starts off: the first view of a graph is the whole graph.
+    hideGenEventNodes: false,
+    hideSimVertexKey0Node: false,
     hidePartonShower: false,
-    hideSmallDisconnectedSubgraphs: true,
+    // Truth filters. Every one of them collapses: a hidden node's visible parents
+    // are joined to its visible children, so nothing is ever orphaned.
+    hidePileup: false,
+    hideUnderlyingEvent: false,
+    hideZeroSimHitSubgraphs: false,
+    energyThresholdGeV: 0,
+    hiddenTruthLevels: new Set(),
+    // The reco overlay is shown or hidden on its own, apart from the truth filters.
+    showRecoObjects: true,
+    forceAtlas2Registered: false,
+    hideSmallDisconnectedSubgraphs: false,
     smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
         gen: '#c1daf3',
@@ -27,12 +38,168 @@ const GraphManager = {
         genSim: '#2ecc71',
         event: '#c79f00'
     },
+
+    // The logical truth graph is standalone: a node is described by its own truth
+    // level, its hit footprint and its role, not by GEN or SIM provenance.
+    // Fill colour carries the dominant truth level, most signal-like first.
+    // Same order as TRUTH_LEVEL_ORDER in preprocess/parse_graph.py, most
+    // signal-like first. This is the only place the precedence is written down.
+    truthLevelOrder: [
+        'signal', 'hardProcess', 'partonJets', 'bHadrons', 'cHadrons',
+        'tauVisibleHadronic', 'tauVisibleLeptonic', 'visibleTau',
+        'reconstructableFromSignal', 'reconstructableFinalState',
+        'stableLegsFromInitialState', 'stableLegsFromUpstream',
+        'stableDecayProducts', 'caloBoundary', 'underlyingEvent'
+    ],
+    truthLevelLabels: {
+        signal: 'signal',
+        hardProcess: 'hard process',
+        partonJets: 'parton jet',
+        bHadrons: 'b hadron',
+        cHadrons: 'c hadron',
+        tauVisibleHadronic: 'visible tau, hadronic',
+        tauVisibleLeptonic: 'visible tau, leptonic',
+        reconstructableFromSignal: 'reconstructable from signal',
+        reconstructableFinalState: 'reconstructable final state',
+        stableLegsFromInitialState: 'stable leg from initial state',
+        stableDecayProducts: 'stable decay product',
+        caloBoundary: 'calo boundary',
+        underlyingEvent: 'underlying event',
+        visibleTau: 'visible tau (old name)',
+        stableLegsFromUpstream: 'stable leg from upstream (old name)',
+        none: 'no level'
+    },
+    // The canvas keeps the colourblind-safe palette rather than the pale label
+    // backgrounds of the DOT dump: a fill behind white text needs the contrast.
+    truthLevelColors: {
+        signal: '#d35fb7',
+        hardProcess: '#bd1f01',
+        partonJets: '#e76300',
+        bHadrons: '#a96b59',
+        cHadrons: '#d0a190',
+        tauVisibleHadronic: '#717581',
+        tauVisibleLeptonic: '#a8adb8',
+        reconstructableFromSignal: '#832db6',
+        reconstructableFinalState: '#c3a3e0',
+        stableLegsFromInitialState: '#3f90da',
+        stableDecayProducts: '#92dadd',
+        caloBoundary: '#b9ac70',
+        underlyingEvent: '#94a4a2',
+        visibleTau: '#717581',
+        stableLegsFromUpstream: '#3f90da',
+        none: '#e8e8e8'
+    },
+    // Names the dumper wrote before the rename. They are listed in the filters and in
+    // the legend only when the graph on screen carries them.
+    truthLegacyLevels: new Set(['visibleTau', 'stableLegsFromUpstream']),
+    truthLevelDarkFills: new Set([
+        '#bd1f01', '#e76300', '#832db6', '#3f90da', '#a96b59', '#717581', '#d35fb7'
+    ]),
+    truthVertexColor: '#d9d9d9',
+    // upstream is the earlier name of the initial-state role, kept so a bundle built
+    // before the rename still draws its artificial vertex.
+    truthArtificialColors: {
+        interaction: '#ffa90e',
+        initialState: '#a96b59',
+        upstream: '#a96b59',
+        beamSideInput: '#b9ac70',
+        underlyingEvent: '#94a4a2'
+    },
+    truthArtificialShapes: {
+        interaction: 'star',
+        initialState: 'pentagon',
+        upstream: 'pentagon',
+        beamSideInput: 'rhomboid',
+        underlyingEvent: 'round-rectangle'
+    },
+    // Border width carries the hit footprint. No hits is drawn dashed.
+    truthFootprintBorderWidths: {
+        caloRec: 5,
+        caloSim: 3,
+        tracker: 2,
+        none: 1
+    },
+    truthMarkerColors: {
+        backscattered: '#e76300',
+        checkpoints: '#009988',
+        plain: '#34495e'
+    },
+    truthArtificialNodeSize: 64,
+
+    // Reco overlay. A reco object is drawn as a rounded rectangle joined to the truth
+    // node its association chose, and the working point decides which edge is shown.
+    recoNodeSize: 46,
+    // Space left between two drawn node boxes by the separation pass.
+    nodeSeparationMargin: 12,
+    // Cell size of the grid the crossing search uses, and how many neighbours a
+    // node is tried against when the untangle pass looks for a swap.
+    crossingGridCell: 300,
+    untanglePartnerLimit: 10,
+    // One colour per association domain of
+    // SimGeneral/TruthGraphAssociatorProducers/python/truthGraphAssociationLabels_cff.py.
+    recoDomainColors: {
+        tracksters: '#0d7d8c',
+        tracks: '#5b6ee1',
+        vertices: '#8c5a8c',
+        secondaryVertices: '#b07aa1',
+        pfClustersEcal: '#c46a1b',
+        pfClustersHcal: '#6a7b2e'
+    },
+    activeWorkingPoint: '',
+    workingPoints: [],
     defaultNodeSize: 58,
     vertexNodeSize: 30,
     eventNodeSize: 88,
     statusOneNodeSizeMultiplier: 1.1,
     statusOneNodeColor: '#ff9589',
     smallParticlePdgIds: new Set([22, 11, -11]),
+
+    // The truth-graph DOT dumper encodes the role of a node in its Graphviz shape.
+    // Map those onto the Cytoscape shape vocabulary so the producer's intent shows
+    // through (seed, muon, and the four vertex kinds are immediately recognisable).
+    gvShapeToCytoscape: {
+        doublecircle: 'ellipse',    // selection seed (rendered with a gold double ring)
+        circle: 'ellipse',
+        ellipse: 'ellipse',         // particle leaving tracker/calo hits
+        oval: 'ellipse',
+        hexagon: 'hexagon',         // muon
+        diamond: 'diamond',         // decay / production vertex
+        box: 'round-rectangle',     // underlying-event vertex
+        rect: 'round-rectangle',
+        rectangle: 'round-rectangle',
+        house: 'pentagon',          // ISR / upstream vertex
+        doubleoctagon: 'octagon',   // hard-interaction vertex
+        octagon: 'octagon',
+        star: 'star',
+    },
+
+    // Graphviz uses X11 colour names, several of them numbered variants
+    // (darkseagreen1, goldenrod4, red2, gray20, ...) that are NOT valid CSS and
+    // would render as black/transparent in the browser. Translate the ones the
+    // truth-graph dumper emits to the exact hex graphviz itself uses, so the
+    // interactive view matches the static SVGs. Plain CSS names pass through.
+    gvColors: {
+        aliceblue: '#f0f8ff', blue: '#0000ff', darkgreen: '#006400',
+        darkorange3: '#cd6600', darkseagreen1: '#c1ffc1', deepskyblue: '#00bfff',
+        firebrick4: '#8b1a1a', gold: '#ffd700', goldenrod4: '#8b6914',
+        gray20: '#333333', gray45: '#737373', gray50: '#7f7f7f', gray55: '#8c8c8c',
+        gray65: '#a6a6a6', gray75: '#bfbfbf', gray85: '#d9d9d9', gray92: '#ebebeb',
+        indianred1: '#ff6a6a', khaki: '#f0e68c', lightblue: '#add8e6',
+        lightskyblue: '#87cefa', mediumpurple1: '#ab82ff', navajowhite: '#ffdead',
+        navy: '#000080', orangered3: '#cd3700', purple: '#a020f0', red2: '#ee0000',
+        royalblue: '#4169e1', salmon: '#fa8072', sienna1: '#ff8247',
+        skyblue: '#87ceeb', violetred1: '#ff3e96', white: '#ffffff',
+    },
+
+    // Translate a Graphviz colour token to a browser-safe colour: pass through
+    // hex (#rrggbb) and CSS names, map known X11 names, fall back to the input.
+    gvColor(name) {
+        if (name === undefined || name === null) return null;
+        const raw = String(name).trim();
+        if (!raw) return null;
+        if (raw.charAt(0) === '#') return raw;
+        return this.gvColors[raw.toLowerCase()] || raw;
+    },
 
     htmlLabelToCanvasText(value) {
         const superscriptChars = {
@@ -104,6 +271,174 @@ const GraphManager = {
         return this.graphName === 'TruthLogicalGraph';
     },
 
+    /**
+     * Turn the association file into reco nodes and one match edge per working point.
+     * The edge target is the truth node the match names, which is the same particle
+     * index the graph dumper wrote, so no name lookup is needed.
+     */
+    // The match to draw for one working point. The Fixed map ranks every candidate root
+    // by shared energy, and an ancestor always holds the hits of its descendants, so its
+    // first entries are hard-process ancestors. Drawn is the best candidate that enters
+    // the calorimeter (a caloBoundary member), which is the level the validation reads
+    // dominance from; then any level member; then the first entry. The adaptive points
+    // carry the single branch they climbed to.
+    pickMatch(matches, truthNodeIds) {
+        const present = (matches || []).filter(m => truthNodeIds.has(m.node));
+        if (present.length === 0) return null;
+        const levelsOf = (id) => {
+            const node = this.getBundleNode(id) || {};
+            const levels = node.truthLevels;
+            return Array.isArray(levels) ? levels : (levels ? String(levels).split(',') : []);
+        };
+        return present.find(m => levelsOf(m.node).includes('caloBoundary'))
+            || present.find(m => levelsOf(m.node).length > 0)
+            || present[0];
+    },
+
+    // The collection name a reco node shows on the canvas; the hover keeps the full one.
+    shortCollectionName(collection) {
+        const known = {
+            ticlTrackstersCLUE3DHigh: 'CLUE3D trackster',
+            ticlTracksterLinks: 'linked trackster',
+            ticlTracksterLinksSuperclusteringDNN: 'supercluster',
+            ticlCandidate: 'TICL candidate',
+            particleFlowClusterECAL: 'ECAL PF cluster',
+            particleFlowClusterHCAL: 'HCAL PF cluster',
+            generalTracks: 'track',
+            offlinePrimaryVertices: 'primary vertex',
+            inclusiveSecondaryVertices: 'secondary vertex'
+        };
+        return known[collection] || String(collection).replace(/^ticl/, '');
+    },
+
+    buildRecoElements(associations, truthNodeIds) {
+        const nodes = [];
+        const edges = [];
+        if (!associations || !Array.isArray(associations.recoObjects)) {
+            return { nodes, edges, workingPoints: [] };
+        }
+
+        const workingPoints = associations.workingPoints || [];
+        associations.recoObjects.forEach((object) => {
+            const matchesByWp = object.matches || {};
+            // A reco object that no working point matched would float unattached, so it
+            // is left out rather than drawn with no edge.
+            const attached = workingPoints.some(wp => (matchesByWp[wp] || []).some(m => truthNodeIds.has(m.node)));
+            if (!attached) return;
+
+            nodes.push({
+                data: {
+                    id: object.id,
+                    truthKind: 'reco',
+                    recoDomain: object.domain,
+                    recoCollection: object.collection,
+                    recoIndex: object.index,
+                    rawEnergy: object.rawEnergy,
+                    truthTitle: this.shortCollectionName(object.collection),
+                    truthSubtitle: `${Number(object.rawEnergy).toFixed(1)} GeV`,
+                    truthHover: [
+                        `${object.collection} #${object.index}`,
+                        `raw energy ${Number(object.rawEnergy).toFixed(2)} GeV`,
+                        `eta ${Number(object.eta).toFixed(2)}  phi ${Number(object.phi).toFixed(2)}`,
+                        `${object.nLayerClusters} layer clusters`,
+                        ...workingPoints.map((wp) => {
+                            const best = this.pickMatch(matchesByWp[wp], truthNodeIds);
+                            return best
+                                ? `${wp}: ${best.node}  score ${Number(best.score).toFixed(3)}`
+                                : `${wp}: no match`;
+                        })
+                    ].join('\n')
+                }
+            });
+
+            workingPoints.forEach((wp) => {
+                const best = this.pickMatch(matchesByWp[wp], truthNodeIds);
+                if (!best) return;
+                // The edge runs from the truth node to the reco node, so the layout
+                // ranks a reco object one row below the particle it matched. The arrow
+                // is drawn at the source end and still points at the truth.
+                edges.push({
+                    data: {
+                        id: `match-${wp}-${object.id}`,
+                        source: best.node,
+                        target: object.id,
+                        isMatchEdge: true,
+                        workingPoint: wp,
+                        matchScore: best.score,
+                        matchSharedEnergy: best.sharedEnergy
+                    }
+                });
+            });
+        });
+
+        return { nodes, edges, workingPoints };
+    },
+
+    /**
+     * Show the match edges of one working point and hide the others, so switching the
+     * point moves the match on the canvas.
+     */
+    setWorkingPoint(name) {
+        this.activeWorkingPoint = name;
+        if (!this.cy) return;
+
+        this.cy.edges('[isMatchEdge]').forEach((edge) => {
+            edge.toggleClass('inactive-match', edge.data('workingPoint') !== name);
+        });
+
+        this.setWorkingPointStatus();
+    },
+
+    setWorkingPointStatus() {
+        const status = document.getElementById('working-point-status');
+        if (!status || !this.cy) return;
+
+        if (!this.showRecoObjects) {
+            status.textContent = 'Reco objects are hidden.';
+            return;
+        }
+
+        const name = this.activeWorkingPoint;
+        const shown = this.cy.edges('[isMatchEdge]').filter(e => e.data('workingPoint') === name).length;
+        status.textContent = `${shown} matched reco objects at ${name}.`;
+    },
+
+    // A node carries a truth classification when the preprocessing recognised the
+    // logical graph. Graphs without it keep the legacy GEN/SIM styling.
+    truthKind(ele) {
+        return String(ele.data('truthKind') || '').trim();
+    },
+
+    hasTruthClassification(ele) {
+        return this.truthKind(ele) !== '';
+    },
+
+    truthLevel(ele) {
+        const level = String(ele.data('truthLevel') || '').trim();
+        return level || 'none';
+    },
+
+    truthFootprint(ele) {
+        return String(ele.data('truthFootprint') || 'none').trim();
+    },
+
+    truthRole(ele) {
+        return String(ele.data('truthRole') || '').trim();
+    },
+
+    isTruthRoot(ele) {
+        return String(ele.data('isRoot') || '').trim() === '1';
+    },
+
+    isBackscattered(ele) {
+        return String(ele.data('backscattered') || '').trim() === '1';
+    },
+
+    hasCheckpoints(ele) {
+        const count = Number.parseInt(ele.data('nCheckpoints'), 10);
+        return Number.isFinite(count) && count > 0;
+    },
+
     isTruthyAttribute(value) {
         if (value === true || value === 1) return true;
         if (value === false || value === 0 || value === null || value === undefined) return false;
@@ -168,6 +503,13 @@ const GraphManager = {
     },
 
     getCompactLabelFromData(data) {
+        // A truth-classified node carries its own two-line label: the title, which
+        // is the particle name or the vertex reason, and a short second line.
+        if (data.truthKind) {
+            const title = this.htmlLabelToCanvasText(data.truthTitle || data.id);
+            return data.truthSubtitle ? `${title}\n${data.truthSubtitle}` : title;
+        }
+
         const dataAccessor = {
             id: () => data.id,
             data: key => data[key]
@@ -253,8 +595,37 @@ const GraphManager = {
         return String(ele.data('status')).trim() === '1';
     },
 
+    getTruthFillColor(ele) {
+        const kind = this.truthKind(ele);
+        if (kind === 'reco') {
+            return this.recoDomainColors[String(ele.data('recoDomain') || '')] || this.recoDomainColors.tracksters;
+        }
+        if (kind === 'artificial') {
+            return this.truthArtificialColors[this.truthRole(ele)] || this.truthArtificialColors.interaction;
+        }
+        if (kind === 'vertex') return this.truthVertexColor;
+        return this.truthLevelColors[this.truthLevel(ele)] || this.truthLevelColors.none;
+    },
+
+    getNodeTextColor(ele) {
+        if (this.truthKind(ele) === 'reco') return '#fff';
+        if (!this.hasTruthClassification(ele)) return '#000';
+        return this.truthLevelDarkFills.has(this.getTruthFillColor(ele)) ? '#fff' : '#000';
+    },
+
     getNodeFillColor(ele) {
+        if (this.hasTruthClassification(ele)) return this.getTruthFillColor(ele);
+
         if (this.hasStatusOne(ele)) return this.statusOneNodeColor;
+
+        // The truth-graph dumper encodes detector region / role in the node fillcolor
+        // (navajowhite=calo, darkseagreen1=tracker, lightskyblue=muon, gold=seed,
+        // aliceblue=GEN-only, ... vertices by role). X11/SVG colour names are
+        // understood directly by the browser, so honour them for logical graphs.
+        if (this.isLogicalGraph()) {
+            const producerFill = this.gvColor(ele.data('fillcolor'));
+            if (producerFill) return producerFill;
+        }
 
         const type = this.getNodeKind(ele);
         if (type.startsWith('GenSim')) return this.nodeTypeColors.genSim;
@@ -268,8 +639,28 @@ const GraphManager = {
         return '#3498db';
     },
 
+    isSeedNode(ele) {
+        return String(ele.data('shape') || '').trim().toLowerCase() === 'doublecircle';
+    },
+
     getNodeShape(ele) {
+        const truthKind = this.truthKind(ele);
+        if (truthKind === 'reco') return 'round-rectangle';
+        if (truthKind === 'artificial') {
+            return this.truthArtificialShapes[this.truthRole(ele)] || 'star';
+        }
+        if (truthKind === 'vertex') return 'diamond';
+        if (truthKind === 'particle') return 'ellipse';
+
         if (this.hasStatusOne(ele)) return 'rectangle';
+
+        // Honour the producer's shape encoding (seed/muon/vertex kinds) when we can
+        // map it; fall back to the kind-based shapes for graphs that do not set it.
+        if (this.isLogicalGraph()) {
+            const gvShape = String(ele.data('shape') || '').trim().toLowerCase();
+            const mapped = this.gvShapeToCytoscape[gvShape];
+            if (mapped) return mapped;
+        }
 
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return 'star';
@@ -285,6 +676,16 @@ const GraphManager = {
     },
 
     getNodeSize(ele) {
+        const truthKind = this.truthKind(ele);
+        if (truthKind === 'reco') return this.recoNodeSize;
+        if (truthKind === 'artificial') return this.truthArtificialNodeSize;
+        if (truthKind === 'vertex') return this.vertexNodeSize;
+        if (truthKind === 'particle') {
+            const particleId = this.getParticlePdgId(ele);
+            const scale = this.smallParticlePdgIds.has(particleId) ? 0.8 : 1;
+            return this.defaultNodeSize * scale;
+        }
+
         const type = this.getNodeKind(ele);
         if (type === 'GenEvent') return this.eventNodeSize;
         if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex') return this.vertexNodeSize;
@@ -298,7 +699,24 @@ const GraphManager = {
         return this.defaultNodeSize;
     },
 
+    // Particles and reco objects carry their text inside the node, so they are wider
+    // than tall; vertices keep their label below the diamond and stay square.
+    getNodeWidth(ele) {
+        const size = this.getNodeSize(ele);
+        const truthKind = this.truthKind(ele);
+        if (truthKind === 'particle') return size * 1.8;
+        if (truthKind === 'reco') return size * 2.3;
+        if (truthKind === 'vertex' || truthKind === 'artificial') return size;
+        return this.isParticleNode(ele) ? size * 1.8 : size;
+    },
+
     getNodeFontSize(ele) {
+        const truthKind = this.truthKind(ele);
+        if (truthKind === 'reco') return 10;
+        if (truthKind === 'artificial') return 11;
+        if (truthKind === 'vertex') return 8;
+        if (truthKind === 'particle') return 14;
+
         const type = this.getNodeKind(ele);
         if (type === 'GenVertex' || type === 'SimVertex' || type === 'GenSimVertex' || type === 'LogicalVertex' || this.isLogicalVertex(ele)) {
             return 10;
@@ -307,15 +725,34 @@ const GraphManager = {
     },
 
     getNodeBorderColor(ele) {
-        if (this.hasCrossedBoundary(ele)) return '#e804ec';
-        if (this.isLogicalGraph()) return '#34495e';
+        if (this.hasTruthClassification(ele)) {
+            if (this.isBackscattered(ele)) return this.truthMarkerColors.backscattered;
+            if (this.hasCheckpoints(ele)) return this.truthMarkerColors.checkpoints;
+            return this.truthMarkerColors.plain;
+        }
 
-        const color = ele.data('color');
+        if (this.hasCrossedBoundary(ele)) return '#e804ec';
+
+        // Honour the producer's border colour (the dumper outlines seeds in gold,
+        // muons in navy, vertices by role); fall back to the default slate.
+        const color = this.gvColor(ele.data('color'));
         return color || '#34495e';
     },
 
     getNodeBorderWidth(ele) {
-        return this.hasCrossedBoundary(ele) ? 3 : 1;
+        if (this.hasTruthClassification(ele)) {
+            if (this.truthKind(ele) !== 'particle') return 1;
+            return this.truthFootprintBorderWidths[this.truthFootprint(ele)] ?? 1;
+        }
+
+        if (this.hasCrossedBoundary(ele)) return 3;
+
+        // Honour the producer's penwidth so seeds (penwidth 3) and muons stand out.
+        const penwidth = Number.parseFloat(ele.data('penwidth'));
+        if (Number.isFinite(penwidth) && penwidth > 0) {
+            return Math.min(6, Math.max(1, penwidth));
+        }
+        return 1;
     },
 
     /**
@@ -324,7 +761,15 @@ const GraphManager = {
     init(data) {
         console.log('Initializing graph with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
         this.graphName = data.metadata?.graph_name || data.graph_name || '';
+        this._simHitInformation = undefined;
+        this.updateLegend();
         this.registerLayoutExtensions();
+
+        // Reco overlay, when the job also produced the associations.
+        const truthNodeIds = new Set(data.nodes.map(n => n.id));
+        const reco = this.buildRecoElements(window.associationData, truthNodeIds);
+        this.workingPoints = reco.workingPoints;
+        this.activeWorkingPoint = reco.workingPoints[0] || '';
 
         // Convert data to Cytoscape format
         const elements = {
@@ -334,15 +779,17 @@ const GraphManager = {
                     ...n,
                     label: this.getCompactLabelFromData(n)
                 }
-            })),
-            edges: data.edges.map(e => ({
+            })).concat(reco.nodes.map(n => ({
+                data: { ...n.data, label: this.getCompactLabelFromData(n.data) }
+            }))),
+            edges: reco.edges.concat(data.edges.map(e => ({
                 data: {
                     id: `${e.source}-${e.target}`,
                     source: e.source,
                     target: e.target,
                     ...e
                 }
-            }))
+            })))
         };
 
         // Initialize Cytoscape
@@ -357,19 +804,29 @@ const GraphManager = {
                     style: {
                         'padding': 2,
                         'label': 'data(label)',
-                        'text-valign': 'center',
+                        'text-valign': function(ele) {
+                            return GraphManager.truthKind(ele) === 'vertex' ? 'bottom' : 'center';
+                        },
                         'text-halign': 'center',
+                        'text-margin-y': function(ele) {
+                            return GraphManager.truthKind(ele) === 'vertex' ? 3 : 0;
+                        },
                         'font-size': function(ele) {
                             return GraphManager.getNodeFontSize(ele);
                         },
                         'font-weight': 600,
                         'text-wrap': 'wrap',
                         'text-max-width': function(ele) {
-                            const size = GraphManager.getNodeSize(ele);
-                            return Number.isFinite(size) ? Math.max(22, size - 4) : 80;
+                            // The vertex four-position needs one line, not the width
+                            // of the diamond it sits under.
+                            if (GraphManager.truthKind(ele) === 'vertex') return 190;
+                            const width = GraphManager.getNodeWidth(ele);
+                            return Number.isFinite(width) ? Math.max(22, width - 4) : 80;
                         },
-                        'line-height': 1,
-                        'color': '#000',
+                        'line-height': 1.1,
+                        'color': function(ele) {
+                            return GraphManager.getNodeTextColor(ele);
+                        },
                         'text-background-opacity': 0,
                         'text-background-padding': 0,
                         'text-background-shape': 'roundrectangle',
@@ -386,13 +843,22 @@ const GraphManager = {
                             return GraphManager.getNodeShape(ele);
                         },
                         'width': function(ele) {
-                            return GraphManager.getNodeSize(ele);
+                            return GraphManager.getNodeWidth(ele);
                         },
                         'height': function(ele) {
                             return GraphManager.getNodeSize(ele);
                         },
                         'border-style': function(ele) {
-                            return GraphManager.hasCrossedBoundary(ele) ? 'double' : 'solid';
+                            if (GraphManager.hasTruthClassification(ele)) {
+                                if (GraphManager.isTruthRoot(ele)) return 'double';
+                                if (GraphManager.truthKind(ele) === 'particle'
+                                    && GraphManager.truthFootprint(ele) === 'none') return 'dashed';
+                                return 'solid';
+                            }
+                            if (GraphManager.hasCrossedBoundary(ele)) return 'double';
+                            // Evoke the producer's doublecircle seed marker.
+                            if (GraphManager.isSeedNode(ele)) return 'double';
+                            return 'solid';
                         }
                     }
                 },
@@ -429,18 +895,6 @@ const GraphManager = {
                     }
                 },
                 {
-                    selector: 'node.gen-event-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
-                    selector: 'node.sim-vertex-key0-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
                     selector: 'node.parton-shower-filtered',
                     style: {
                         'display': 'none'
@@ -452,18 +906,35 @@ const GraphManager = {
                         'display': 'none'
                     }
                 },
+                {
+                    selector: 'node.reco-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
                 // Edge styles
                 {
                     selector: 'edge',
                     style: {
-                        'width': 1,
+                        // Honour the producer's edge width: the dumper encodes
+                        // provenance as red2/penwidth 2.4 (signal), blue/1.3
+                        // (underlying event), gray20/dashed/0.8 (the rest).
+                        'width': function(ele) {
+                            const penwidth = Number.parseFloat(ele.data('penwidth'));
+                            return Number.isFinite(penwidth) && penwidth > 0
+                                ? Math.min(6, Math.max(0.8, penwidth))
+                                : 1;
+                        },
+                        'line-style': function(ele) {
+                            return String(ele.data('style') || '').toLowerCase().includes('dashed')
+                                ? 'dashed'
+                                : 'solid';
+                        },
                         'line-color': function(ele) {
-                            const color = ele.data('color');
-                            return color || '#95a5a6';
+                            return GraphManager.gvColor(ele.data('color')) || '#95a5a6';
                         },
                         'target-arrow-color': function(ele) {
-                            const color = ele.data('color');
-                            return color || '#95a5a6';
+                            return GraphManager.gvColor(ele.data('color')) || '#95a5a6';
                         },
                         'target-arrow-shape': 'triangle',
                         'curve-style': 'bezier',
@@ -478,18 +949,6 @@ const GraphManager = {
                     }
                 },
                 {
-                    selector: 'edge.gen-event-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
-                    selector: 'edge.sim-vertex-key0-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
                     selector: 'edge.parton-shower-filtered',
                     style: {
                         'display': 'none'
@@ -497,6 +956,36 @@ const GraphManager = {
                 },
                 {
                     selector: 'edge.small-subgraph-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge.reco-filtered',
+                    style: {
+                        'display': 'none'
+                    }
+                },
+                {
+                    selector: 'edge[isMatchEdge]',
+                    style: {
+                        'line-style': 'dashed',
+                        'line-color': '#0d7d8c',
+                        'source-arrow-color': '#0d7d8c',
+                        'source-arrow-shape': 'triangle',
+                        'target-arrow-shape': 'none',
+                        'curve-style': 'bezier',
+                        'width': function(ele) {
+                            const shared = Number.parseFloat(ele.data('matchSharedEnergy'));
+                            if (!Number.isFinite(shared) || shared <= 0) return 1.5;
+                            return Math.min(7, 1.5 + Math.sqrt(shared) * 12);
+                        },
+                        'opacity': 0.95,
+                        'z-index': 20
+                    }
+                },
+                {
+                    selector: 'edge.inactive-match',
                     style: {
                         'display': 'none'
                     }
@@ -576,6 +1065,12 @@ const GraphManager = {
             }
         }
 
+        if (!this.forceAtlas2Registered && typeof ForceAtlas2Layout === 'function') {
+            // The layout registers itself when it is loaded next to cytoscape; this
+            // only records that it is there.
+            this.forceAtlas2Registered = true;
+        }
+
         if (!this.elkRegistered && typeof cytoscapeElk === 'function') {
             try {
                 cytoscape.use(cytoscapeElk);
@@ -593,66 +1088,57 @@ const GraphManager = {
         if (this.selectedLayoutEngine === 'fcose' && this.fcoseRegistered) {
             return {
                 name: 'fcose',
-                // animate: false,
-                // quality: 'proof',
-                // // randomize: false,
-                // fit: false,
-                // // padding: 30,
-                // // nodeRepulsion: 4500,
-                // // idealEdgeLength: 55,
-                // // edgeElasticity: 0.45,
-                // // gravity: 0.25,
-                // numIter: 8000
-
-                // "fast" config
                 quality: 'proof',
                 randomize: true,
-
                 animate: false,
                 fit: false,
                 padding: 40,
 
-                uniformNodeDimensions: true,
-                nodeDimensionsIncludeLabels: false,
+                // A particle box is three times wider than a vertex box, and a vertex
+                // draws its label under the diamond, so the force model must use the
+                // real size of each node and the size of its label.
+                uniformNodeDimensions: false,
+                nodeDimensionsIncludeLabels: true,
 
                 packComponents: true,
 
                 samplingType: true,
                 sampleSize: 50,
-                nodeSeparation: 500, // from 80
+                nodeSeparation: 500,
 
-                // Sort-of readable but lots of edge crossings
-                // nodeRepulsion: () => 8000,
-                // idealEdgeLength: () => 200,
-                // edgeElasticity: () => 0.3, // from 0.35
-                // gravity: 0.15,
-                // gravityRange: 3.8,
-
-                // also good
-                nodeRepulsion: () => 12000,
-                idealEdgeLength: () => 120,
+                nodeRepulsion: () => 20000,
+                idealEdgeLength: () => 150,
                 edgeElasticity: () => 0.2,
                 gravity: 0.05,
                 gravityRange: 4.5,
 
-                // The below are not that good, probably needs to have an adjustment bewteen vertex/particle 
-
-                // nodeRepulsion: () => 12000,
-                // idealEdgeLength: edge => edge.target().outgoers('node').length == 1 ? 90 : ((edge.target().outgoers('node').length == 2) ? 100 : 140),
-                // edgeElasticity: () => 0.2,
-                // gravity: 0.05,
-                // gravityRange: 4.5,
-
-                // nodeRepulsion: () => 12000000,
-                // idealEdgeLength: edge => edge.target().outgoers('node').length == 1 ? 1 : ((edge.target().outgoers('node').length == 2) ? 2 : 5), //  edge => Math.min(20+ 30*(-1+edge.target().outgoers('node').length), 80)
-                // edgeElasticity: edge => 1.* (edge.target().outgoers('node').length == 1 ? 0.5 :  ((edge.target().outgoers('node').length == 2) ? 0.6: 0.8)),
-                // gravity: 0.1,
-                // gravityRange: 3,
-
                 numIter: 30000,
                 tile: true,
-                tilingPaddingVertical: 12,
-                tilingPaddingHorizontal: 12
+                tilingPaddingVertical: 20,
+                tilingPaddingHorizontal: 20
+            };
+        }
+
+        if (this.selectedLayoutEngine === 'forceatlas2' && this.forceAtlas2Registered) {
+            return {
+                name: 'forceatlas2',
+                animate: false,
+                fit: false,
+                padding: 40,
+                // Gephi's defaults, with the two switches that suit a truth graph: a
+                // vertex with many daughters pushes them apart instead of pulling them
+                // together, and the node sizes keep the drawn boxes from settling on
+                // top of each other.
+                iterations: 400,
+                gravity: 1,
+                scalingRatio: 10,
+                outboundAttractionDistribution: true,
+                adjustSizes: true,
+                barnesHutTheta: 0.6,
+                nodeSize: (node) => {
+                    const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
+                    return Math.max(box.w, box.h) / 2 + this.nodeSeparationMargin / 2;
+                }
             };
         }
 
@@ -661,11 +1147,14 @@ const GraphManager = {
                 name: 'elk',
                 animate: false,
                 fit: false,
+                nodeDimensionsIncludeLabels: true,
                 elk: {
                     algorithm: 'layered',
                     'elk.direction': 'DOWN',
-                    'elk.layered.spacing.nodeNodeBetweenLayers': 5,
-                    'elk.spacing.nodeNode': 10,
+                    'elk.layered.spacing.nodeNodeBetweenLayers': 70,
+                    'elk.spacing.nodeNode': 40,
+                    'elk.spacing.edgeNode': 20,
+                    'elk.spacing.edgeEdge': 12,
                     'elk.edgeRouting': 'ORTHOGONAL'
 
                     // algorithm: 'stress', // Never ending.....
@@ -682,12 +1171,13 @@ const GraphManager = {
             return {
                 name: 'dagre',
                 animate: false,
+                nodeDimensionsIncludeLabels: true,
                 rankDir: 'TB',
                 ranker: 'network-simplex',
-                nodeSep: 20,
-                edgeSep: 5,
-                rankSep: 80,
-                spacingFactor: 0.9,
+                nodeSep: 45,
+                edgeSep: 10,
+                rankSep: 90,
+                spacingFactor: 1.0,
                 fit: false,
                 padding: 30,
                 edgeWeight: edge => this.getDagreEdgeWeight(edge)
@@ -737,19 +1227,24 @@ const GraphManager = {
             this.cy.container().style.cursor = '';
         });
 
-        // Node hover - show tooltip
+        // Node hover - expand the two-line label into the full summary
         this.cy.on('mouseover', 'node', (evt) => {
             const node = evt.target;
-            const tooltip = node.data('tooltip');
-            if (tooltip) {
-                node.style('text-background-color', 'rgba(255, 255, 255, 0.9)');
-            }
+            node.style('text-background-color', 'rgba(255, 255, 255, 0.9)');
+            this.showNodeTooltip(node, evt.renderedPosition);
+        });
+
+        this.cy.on('mousemove', 'node', (evt) => {
+            this.moveNodeTooltip(evt.renderedPosition);
         });
 
         this.cy.on('mouseout', 'node', (evt) => {
             const node = evt.target;
             node.style('text-background-color', 'rgba(255, 255, 255, 0.7)');
+            this.hideNodeTooltip();
         });
+
+        this.cy.on('pan zoom', () => this.hideNodeTooltip());
 
         // Background click - clear selection
         this.cy.on('tap', (evt) => {
@@ -760,9 +1255,278 @@ const GraphManager = {
     },
 
     /**
+     * Show the legend that matches the loaded graph. The logical truth graph is
+     * standalone, so its legend replaces the GEN/SIM one rather than adding to it.
+     */
+    updateLegend() {
+        const truthLegend = document.getElementById('legend-truth');
+        const genSimLegend = document.getElementById('legend-gensim');
+        if (!truthLegend || !genSimLegend) return;
+
+        const isTruth = this.isLogicalGraph();
+        truthLegend.classList.toggle('hidden', !isTruth);
+        genSimLegend.classList.toggle('hidden', isTruth);
+
+        // The GEN/SIM view options have no meaning in the standalone truth graph,
+        // and the truth filters have none in the raw one.
+        document.querySelectorAll('.gensim-only').forEach((element) => {
+            element.classList.toggle('hidden', isTruth);
+        });
+        document.querySelectorAll('.truth-only').forEach((element) => {
+            element.classList.toggle('hidden', !isTruth);
+        });
+    },
+
+    /**
+     * Return the element that carries the hover summary, creating it on first use.
+     */
+    nodeTooltipElement() {
+        if (!this._nodeTooltip) {
+            const element = document.createElement('div');
+            element.id = 'node-tooltip';
+            element.className = 'hidden';
+            document.body.appendChild(element);
+            this._nodeTooltip = element;
+        }
+        return this._nodeTooltip;
+    },
+
+    /**
+     * Show the full node summary next to the cursor. The canvas label stays at
+     * two lines, so the rest of the truth information appears only on hover.
+     */
+    showNodeTooltip(node, renderedPosition) {
+        const text = node.data('truthHover') || node.data('tooltip') || node.data('detailLabel');
+        if (!text) return;
+
+        const element = this.nodeTooltipElement();
+        element.textContent = this.htmlLabelToCanvasText(text);
+        element.classList.remove('hidden');
+        this.moveNodeTooltip(renderedPosition);
+    },
+
+    moveNodeTooltip(renderedPosition) {
+        if (!this._nodeTooltip || this._nodeTooltip.classList.contains('hidden')) return;
+        if (!renderedPosition) return;
+
+        const container = this.cy.container().getBoundingClientRect();
+        const element = this._nodeTooltip;
+        const left = container.left + renderedPosition.x + 16;
+        const top = container.top + renderedPosition.y + 16;
+        const maxLeft = window.innerWidth - element.offsetWidth - 8;
+        const maxTop = window.innerHeight - element.offsetHeight - 8;
+
+        element.style.left = `${Math.max(8, Math.min(left, maxLeft))}px`;
+        element.style.top = `${Math.max(8, Math.min(top, maxTop))}px`;
+    },
+
+    hideNodeTooltip() {
+        if (this._nodeTooltip) this._nodeTooltip.classList.add('hidden');
+    },
+
+    /**
      * Setup graph-level view option controls.
      */
+    setupLegendToggle() {
+        const toggle = document.getElementById('legend-toggle');
+        const legend = document.getElementById('legend');
+        if (!toggle || !legend) return;
+
+        toggle.addEventListener('click', () => {
+            const collapsed = legend.classList.toggle('collapsed');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+        });
+    },
+
+    /**
+     * Build the level check list and wire every truth filter control.
+     */
+    setupTruthFilters() {
+        const pileup = document.getElementById('hide-pileup-checkbox');
+        if (pileup) {
+            pileup.checked = this.hidePileup;
+            pileup.addEventListener('change', () => this.setHidePileup(pileup.checked));
+        }
+
+        const underlyingEvent = document.getElementById('hide-underlying-event-checkbox');
+        if (underlyingEvent) {
+            underlyingEvent.checked = this.hideUnderlyingEvent;
+            underlyingEvent.addEventListener('change', () => this.setHideUnderlyingEvent(underlyingEvent.checked));
+        }
+
+        const zeroSimHits = document.getElementById('hide-zero-simhits-checkbox');
+        if (zeroSimHits) {
+            zeroSimHits.checked = this.hideZeroSimHitSubgraphs;
+            zeroSimHits.addEventListener('change', () => this.setHideZeroSimHitSubgraphs(zeroSimHits.checked));
+        }
+
+        const threshold = document.getElementById('energy-threshold-input');
+        if (threshold) {
+            threshold.value = String(this.energyThresholdGeV);
+            threshold.addEventListener('change', () => this.setEnergyThreshold(threshold.value));
+        }
+
+        const items = document.getElementById('level-filter-items');
+        if (!items) return;
+
+        items.innerHTML = '';
+        const levels = this.levelsForControls();
+        levels.forEach((level) => {
+            const label = document.createElement('label');
+            label.className = 'checkbox-label level-filter-item';
+
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = !this.hiddenTruthLevels.has(level);
+            box.dataset.level = level;
+            box.addEventListener('change', () => this.setTruthLevelVisible(level, box.checked));
+
+            const swatch = document.createElement('span');
+            swatch.className = 'level-filter-swatch';
+            swatch.style.background = this.truthLevelColors[level] || this.truthLevelColors.none;
+
+            label.appendChild(box);
+            label.appendChild(swatch);
+            label.appendChild(document.createTextNode(this.truthLevelLabels[level] || level));
+            items.appendChild(label);
+        });
+
+        const setAll = (visible) => {
+            items.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = visible; });
+            this.hiddenTruthLevels = visible ? new Set() : new Set(levels);
+            this.applyCollapsingFilters();
+            this.relayoutVisible();
+        };
+
+        const allButton = document.getElementById('level-filter-all');
+        if (allButton) allButton.addEventListener('click', () => setAll(true));
+        const noneButton = document.getElementById('level-filter-none');
+        if (noneButton) noneButton.addEventListener('click', () => setAll(false));
+    },
+
+    /**
+     * The levels the filter list and the legend show: the current vocabulary, plus
+     * an older name only when the graph on screen still uses it.
+     */
+    levelsForControls() {
+        const present = new Set();
+        if (this.cy) {
+            this.cy.nodes().forEach(node => this.truthLevelsOf(node).forEach(level => present.add(level)));
+        }
+        return [...this.truthLevelOrder.filter(level => !this.truthLegacyLevels.has(level) || present.has(level)), 'none'];
+    },
+
+    /**
+     * Fill the truth-level legend from the same vocabulary the filters use, so the
+     * two can never drift apart.
+     */
+    buildLevelLegend() {
+        const container = document.getElementById('legend-levels');
+        if (!container) return;
+
+        container.innerHTML = '';
+        this.levelsForControls().forEach((level) => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+
+            const swatch = document.createElement('div');
+            swatch.className = 'legend-color';
+            swatch.style.background = this.truthLevelColors[level] || this.truthLevelColors.none;
+
+            const text = document.createElement('span');
+            text.textContent = this.truthLevelLabels[level] || level;
+
+            item.appendChild(swatch);
+            item.appendChild(text);
+            container.appendChild(item);
+        });
+    },
+
+    /**
+     * Let the control bar fold away, so the graph gets the whole window. The
+     * button stays visible, and H toggles it from the keyboard.
+     */
+    setupControlsToggle() {
+        const toggle = document.getElementById('controls-toggle');
+        const app = document.getElementById('app');
+        if (!toggle || !app) return;
+
+        const apply = () => {
+            const collapsed = app.classList.contains('controls-collapsed');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.textContent = collapsed ? 'Show controls' : 'Hide controls';
+            if (this.cy) this.cy.resize();
+        };
+
+        toggle.addEventListener('click', () => {
+            app.classList.toggle('controls-collapsed');
+            apply();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'h' && event.key !== 'H') return;
+            const target = event.target;
+            const tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (target && target.isContentEditable) return;
+
+            app.classList.toggle('controls-collapsed');
+            apply();
+        });
+
+        apply();
+    },
+
+    /**
+     * Build the working-point selector from what the association file carries, and
+     * apply the first point. Hidden when the job produced no associations.
+     */
+    setupWorkingPointControl() {
+        const container = document.getElementById('working-point-control');
+        if (!container) return;
+
+        if (this.workingPoints.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+
+        const showReco = document.getElementById('show-reco-checkbox');
+        if (showReco) {
+            showReco.checked = this.showRecoObjects;
+            showReco.onchange = () => this.setShowRecoObjects(showReco.checked);
+        }
+
+        const items = document.getElementById('working-point-items');
+        items.innerHTML = '';
+        this.workingPoints.forEach((name) => {
+            const label = document.createElement('label');
+            label.className = 'checkbox-label';
+
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'working-point';
+            radio.value = name;
+            radio.checked = name === this.activeWorkingPoint;
+            radio.addEventListener('change', () => {
+                if (radio.checked) this.setWorkingPoint(name);
+            });
+
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(name));
+            items.appendChild(label);
+        });
+
+        this.applyRecoFilter();
+        this.setWorkingPoint(this.activeWorkingPoint);
+    },
+
     setupViewOptions() {
+        this.setupLegendToggle();
+        this.setupWorkingPointControl();
+        this.setupControlsToggle();
+        this.buildLevelLegend();
+        this.setupTruthFilters();
         const hideGenEventCheckbox = document.getElementById('hide-gen-event-checkbox');
         if (hideGenEventCheckbox) {
             hideGenEventCheckbox.checked = this.hideGenEventNodes;
@@ -845,20 +1609,8 @@ const GraphManager = {
         this.relayoutVisible();
     },
 
-    /**
-     * Apply the GenEvent view filter without disturbing focus/dependency filters.
-     */
     applyGenEventFilter() {
-        this.cy.nodes().removeClass('gen-event-filtered');
-        this.cy.edges().removeClass('gen-event-filtered');
-
-        if (!this.hideGenEventNodes) {
-            return;
-        }
-
-        const genEventNodes = this.cy.nodes().filter(node => this.isGenEventNode(node));
-        genEventNodes.addClass('gen-event-filtered');
-        genEventNodes.connectedEdges().addClass('gen-event-filtered');
+        this.applyCollapsingFilters();
     },
 
     /**
@@ -878,20 +1630,8 @@ const GraphManager = {
         this.relayoutVisible();
     },
 
-    /**
-     * Apply the SimVertex key=0 view filter without disturbing focus/dependency filters.
-     */
     applySimVertexKey0Filter() {
-        this.cy.nodes().removeClass('sim-vertex-key0-filtered');
-        this.cy.edges().removeClass('sim-vertex-key0-filtered');
-
-        if (!this.hideSimVertexKey0Node) {
-            return;
-        }
-
-        const simVertexKey0Nodes = this.cy.nodes().filter(node => this.isSimVertexKey0Node(node));
-        simVertexKey0Nodes.addClass('sim-vertex-key0-filtered');
-        simVertexKey0Nodes.connectedEdges().addClass('sim-vertex-key0-filtered');
+        this.applyCollapsingFilters();
     },
 
     /**
@@ -913,26 +1653,253 @@ const GraphManager = {
     },
 
     applyPartonShowerFilter() {
+        this.applyCollapsingFilters();
+    },
+
+    /**
+     * Hide every node that a collapsing filter rejects, then join the visible
+     * parents of the hidden set to its visible children. All collapsing filters
+     * share one pass: run separately, each would bridge only around its own
+     * hidden nodes and could strand a node whose neighbours another filter hid.
+     */
+    applyCollapsingFilters() {
         this.cy.edges('[isPartonShowerBypass]').remove();
         this.cy.nodes().removeClass('parton-shower-filtered');
         this.cy.edges().removeClass('parton-shower-filtered');
 
-        if (!this.hidePartonShower) {
+        let hiddenNodes = this.cy.collection();
+
+        // The GenEvent node and the SimVertex key=0 node belong to the raw GEN/SIM
+        // graph. In the logical truth graph key=0 is an ordinary SimVertex, and
+        // hiding it would drop a real decay vertex, so neither filter runs there.
+        if (!this.isLogicalGraph()) {
+            if (this.hideGenEventNodes) {
+                hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isGenEventNode(node)));
+            }
+            if (this.hideSimVertexKey0Node) {
+                hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isSimVertexKey0Node(node)));
+            }
+        }
+
+        if (this.hidePartonShower) {
+            const partonShowerNodes = this.cy.nodes().filter(node => this.isPartonShowerNode(node));
+            hiddenNodes = hiddenNodes
+                .union(partonShowerNodes)
+                .union(this.getSingleChildParentVertices(partonShowerNodes));
+        }
+
+        if (this.hasActiveTruthFilter()) {
+            hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isTruthFiltered(node)));
+        }
+
+        if (hiddenNodes.length === 0) {
+            this.reportFilterState();
             return;
         }
 
-        const partonShowerNodes = this.cy.nodes().filter(node => this.isPartonShowerNode(node));
-        const parentVertices = this.getSingleChildParentVertices(partonShowerNodes);
-        const hiddenNodes = partonShowerNodes.union(parentVertices);
+        hiddenNodes = this.withDanglingVerticesHidden(hiddenNodes);
 
         hiddenNodes.addClass('parton-shower-filtered');
         hiddenNodes.connectedEdges().addClass('parton-shower-filtered');
         this.addPartonShowerBypassEdges(hiddenNodes);
+        this.reportFilterState();
+    },
+
+    /**
+     * Show how many nodes survive the filters, and warn when a filter cannot run.
+     */
+    reportFilterState() {
+        const status = document.getElementById('filter-status');
+        if (!status) return;
+
+        const total = this.cy.nodes().length;
+        const visible = this.getVisibleNodes().length;
+        const messages = [`Showing ${visible} of ${total} nodes.`];
+
+        if (this.hideZeroSimHitSubgraphs && !this.graphHasSimHitInformation()) {
+            messages.push('This graph carries no sim-hit counts, so the sim-hit filter is not applied.');
+        }
+
+        status.textContent = messages.join(' ');
+    },
+
+    /**
+     * Add to the hidden set every vertex that filtering has left dangling, and
+     * repeat until nothing more dangles, because hiding one vertex can strand the
+     * next. A vertex dangles when it once had parents and no visible node is
+     * reachable upstream of it, or it once had children and none is reachable
+     * downstream. Reachability is judged through the hidden nodes, the same walk
+     * the bypass edges follow, so a vertex whose daughters are hidden but whose
+     * grand-daughters are visible stays: the bypass reconnects it.
+     *
+     * The test is against what the node originally had, so a true source or sink
+     * of the graph is never removed and an unfiltered graph is left untouched.
+     */
+    withDanglingVerticesHidden(hiddenNodes) {
+        let hidden = hiddenNodes;
+        let hiddenIds = new Set(hidden.map(node => node.id()));
+
+        for (let pass = 0; pass < 100; pass++) {
+            const dangling = this.cy.nodes().filter((node) => {
+                if (hiddenIds.has(node.id())) return false;
+                const kind = this.truthKind(node);
+                if (kind !== 'vertex' && kind !== 'artificial') return false;
+
+                const hadParents = node.incomers('node').length > 0;
+                const hadChildren = node.outgoers('node').length > 0;
+
+                if (hadParents && this.getVisibleBoundaryNodes(node, 'in', hiddenIds).length === 0) return true;
+                if (hadChildren && this.getVisibleBoundaryNodes(node, 'out', hiddenIds).length === 0) return true;
+                return false;
+            });
+
+            if (dangling.length === 0) break;
+
+            hidden = hidden.union(dangling);
+            hiddenIds = new Set(hidden.map(node => node.id()));
+        }
+
+        return hidden;
+    },
+
+    /**
+     * Report whether the graph carries sim-hit counts at all. A DOT dumped without
+     * a hit index reports zero for every particle, and hiding on that would empty
+     * the view rather than drop the particles that leave nothing behind.
+     */
+    graphHasSimHitInformation() {
+        if (this._simHitInformation === undefined) {
+            this._simHitInformation = this.cy.nodes().some((node) => {
+                if (this.truthKind(node) !== 'particle') return false;
+                const simHits = Number.parseInt(node.data('truthSimHits'), 10);
+                return Number.isFinite(simHits) && simHits > 0;
+            });
+        }
+        return this._simHitInformation;
+    },
+
+    hasActiveTruthFilter() {
+        return this.hidePileup
+            || this.hideUnderlyingEvent
+            || this.hideZeroSimHitSubgraphs
+            || this.energyThresholdGeV > 0
+            || this.hiddenTruthLevels.size > 0;
+    },
+
+    /**
+     * Report whether a truth filter rejects this node. Vertices are judged only on
+     * provenance, so a vertex is never dropped for an energy or a level that it
+     * does not carry.
+     */
+    isTruthFiltered(node) {
+        if (!this.hasTruthClassification(node)) return false;
+        if (this.truthKind(node) === 'reco') return false;
+
+        if (this.hidePileup && String(node.data('truthPileup')) === '1') return true;
+
+        const kind = this.truthKind(node);
+        if (this.hideUnderlyingEvent) {
+            if (kind === 'artificial' && this.truthRole(node) === 'underlyingEvent') return true;
+            if (kind === 'particle' && this.truthLevelsOf(node).includes('underlyingEvent')) return true;
+        }
+
+        if (kind !== 'particle') return false;
+
+        if (this.hideZeroSimHitSubgraphs && this.graphHasSimHitInformation()) {
+            const simHits = Number.parseInt(node.data('truthSimHits'), 10);
+            if (Number.isFinite(simHits) && simHits === 0) return true;
+        }
+
+        if (this.energyThresholdGeV > 0) {
+            const energy = Number.parseFloat(node.data('truthEnergy'));
+            if (Number.isFinite(energy) && energy >= 0 && energy < this.energyThresholdGeV) return true;
+        }
+
+        if (this.hiddenTruthLevels.size > 0 && this.hiddenTruthLevels.has(this.truthLevel(node))) return true;
+
+        return false;
+    },
+
+    truthLevelsOf(node) {
+        const levels = node.data('truthLevels');
+        if (Array.isArray(levels)) return levels;
+        return String(levels || '').split(',').map(part => part.trim()).filter(Boolean);
+    },
+
+    setHidePileup(shouldHide) {
+        this.hidePileup = shouldHide;
+        this.applyCollapsingFilters();
+        this.relayoutVisible();
+    },
+
+    setHideUnderlyingEvent(shouldHide) {
+        this.hideUnderlyingEvent = shouldHide;
+        this.applyCollapsingFilters();
+        this.relayoutVisible();
+    },
+
+    setHideZeroSimHitSubgraphs(shouldHide) {
+        this.hideZeroSimHitSubgraphs = shouldHide;
+        this.applyCollapsingFilters();
+        this.relayoutVisible();
+    },
+
+    setShowRecoObjects(shouldShow) {
+        this.showRecoObjects = shouldShow;
+        this.applyRecoFilter();
+        this.relayoutVisible();
+    },
+
+    /**
+     * Show or hide the reco overlay. A reco object is only ever the target of a
+     * match edge, so hiding it strands no truth node and needs no bypass edge.
+     */
+    applyRecoFilter() {
+        if (!this.cy) return;
+
+        const hide = !this.showRecoObjects;
+        this.cy.nodes().filter(node => this.truthKind(node) === 'reco').toggleClass('reco-filtered', hide);
+        this.cy.edges('[isMatchEdge]').toggleClass('reco-filtered', hide);
+        this.setWorkingPointStatus();
+    },
+
+    setEnergyThreshold(thresholdGeV) {
+        const value = Number.parseFloat(thresholdGeV);
+        this.energyThresholdGeV = Number.isFinite(value) && value > 0 ? value : 0;
+        this.applyCollapsingFilters();
+        this.relayoutVisible();
+    },
+
+    setTruthLevelVisible(level, visible) {
+        if (visible) {
+            this.hiddenTruthLevels.delete(level);
+        } else {
+            this.hiddenTruthLevels.add(level);
+        }
+        this.applyCollapsingFilters();
+        this.relayoutVisible();
     },
 
     isPartonShowerNode(node) {
         const status = Number.parseInt(node.data('status'), 10);
-        return (status > 30 && status < 80 && status!=62 && Math.abs(this.getParticlePdgId(node))!=6) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
+        return this.isShowerBookkeeping(this.getParticlePdgId(node))
+            || (status > 30 && status < 80 && status!=62 && Math.abs(this.getParticlePdgId(node))!=6) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
+    },
+
+    /**
+     * Report whether a PDG id names shower bookkeeping rather than a particle a
+     * detector could be asked about: a string, a cluster, a diquark, a pomeron or a
+     * generator-internal state. Same rule as truth::isShowerObject, minus the bare
+     * partons, which the levels partonJets and hardProcess do ask about. The main
+     * event now keeps its shower, so these reach the graph.
+     */
+    isShowerBookkeeping(pdgId) {
+        const id = Math.abs(Number.parseInt(pdgId, 10));
+        if (!Number.isFinite(id) || id === 0) return false;
+        if (id >= 91 && id <= 94) return true;
+        if (id === 990) return true;
+        if (id >= 1000 && id <= 9999 && Math.floor(id / 10) % 10 === 0 && Math.floor(id / 100) % 10 !== 0) return true;
+        return id >= 9900000 && id < 1000000000;
     },
 
     getSingleChildParentVertices(partonShowerNodes) {
@@ -1344,18 +2311,21 @@ const GraphManager = {
             options: {
                 rankdir: 'TB',
                 ranker: 'network-simplex',
-                nodesep: 20,
-                edgesep: 5,
-                ranksep: 80,
+                nodesep: 45,
+                edgesep: 10,
+                ranksep: 90,
                 marginx: 30,
                 marginy: 30,
-                spacingFactor: 0.9
+                spacingFactor: 1.0
             },
-            nodes: visibleNodes.map(node => ({
-                id: node.id(),
-                width: Math.max(1, node.outerWidth()),
-                height: Math.max(1, node.outerHeight())
-            })),
+            nodes: visibleNodes.map(node => {
+                const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
+                return {
+                    id: node.id(),
+                    width: Math.max(1, box.w),
+                    height: Math.max(1, box.h)
+                };
+            }),
             edges: visibleEdges.map(edge => ({
                 id: edge.id(),
                 source: edge.source().id(),
@@ -1392,6 +2362,7 @@ const GraphManager = {
             const positions = event.data?.positions || [];
             this.applyWorkerLayoutPositions(positions);
             if (this.canceledLayoutRunId !== runId) {
+                this.tidyLayout();
                 this.fitVisible();
             }
             this.hideLayoutStatus();
@@ -1443,6 +2414,7 @@ const GraphManager = {
 
             this.activeLayout = null;
             if (this.canceledLayoutRunId !== runId) {
+                this.tidyLayout();
                 this.fitVisible();
             }
             this.hideLayoutStatus();
@@ -1558,7 +2530,398 @@ const GraphManager = {
     getSelectedLayoutLabel() {
         if (this.selectedLayoutEngine === 'fcose') return 'fCoSE';
         if (this.selectedLayoutEngine === 'elk') return 'ELK';
+        if (this.selectedLayoutEngine === 'forceatlas2') return 'ForceAtlas2';
         return 'Dagre';
+    },
+
+    /**
+     * Open up the drawn view after a layout: no two node boxes overlap, and no
+     * edge runs across a node it does not touch. A layout separates the boxes it
+     * was given, but it draws every edge straight between two centres. Returns
+     * how many pushes it applied.
+     */
+    separateOverlaps({ clearEdges = true, maxPasses = 6 } = {}) {
+        const nodes = this.getVisibleNodes();
+        if (nodes.length < 2) return 0;
+
+        const margin = this.nodeSeparationMargin / 2;
+        const items = nodes.map((node) => {
+            const box = node.boundingBox({ includeLabels: true, includeOverlays: false });
+            const position = node.position();
+            return {
+                node,
+                x: position.x,
+                y: position.y,
+                offsetX: (box.x1 + box.x2) / 2 - position.x,
+                offsetY: (box.y1 + box.y2) / 2 - position.y,
+                halfWidth: box.w / 2 + margin,
+                halfHeight: box.h / 2 + margin
+            };
+        });
+
+        const byId = new Map(items.map(item => [item.node.id(), item]));
+        const edges = this.cy.edges()
+            .filter(edge => this.isEdgeVisibleForLayout(edge))
+            .map(edge => ({ source: byId.get(edge.source().id()), target: byId.get(edge.target().id()) }))
+            .filter(edge => edge.source && edge.target && edge.source !== edge.target);
+
+        // A bucket grid keeps each pass close to linear: two boxes can only touch
+        // when they share a cell or sit in neighbouring ones, and an edge can only
+        // cross a box in a cell the edge passes through.
+        const cell = items.reduce((size, item) => Math.max(size, item.halfWidth * 2, item.halfHeight * 2), 40);
+        const centreX = item => item.x + item.offsetX;
+        const centreY = item => item.y + item.offsetY;
+        let pushes = 0;
+
+        for (let pass = 0; pass < maxPasses; pass += 1) {
+            const buckets = new Map();
+            items.forEach((item) => {
+                const key = `${Math.floor(centreX(item) / cell)}:${Math.floor(centreY(item) / cell)}`;
+                const bucket = buckets.get(key);
+                if (bucket) bucket.push(item); else buckets.set(key, [item]);
+            });
+
+            let passPushes = 0;
+
+            // Node against node.
+            buckets.forEach((bucket, key) => {
+                const [column, row] = key.split(':').map(Number);
+                let neighbours = [];
+                for (let dx = 0; dx <= 1; dx += 1) {
+                    for (let dy = -1; dy <= 1; dy += 1) {
+                        if (dx === 0 && dy < 0) continue;
+                        const other = buckets.get(`${column + dx}:${row + dy}`);
+                        if (other && other !== bucket) neighbours = neighbours.concat(other);
+                    }
+                }
+
+                bucket.forEach((a, index) => {
+                    bucket.slice(index + 1).concat(neighbours).forEach((b) => {
+                        const gapX = (a.halfWidth + b.halfWidth) - Math.abs(centreX(a) - centreX(b));
+                        const gapY = (a.halfHeight + b.halfHeight) - Math.abs(centreY(a) - centreY(b));
+                        if (gapX <= 0 || gapY <= 0) return;
+
+                        passPushes += 1;
+                        if (gapX < gapY) {
+                            const shift = (gapX / 2) * (centreX(a) <= centreX(b) ? -1 : 1);
+                            a.x += shift;
+                            b.x -= shift;
+                        } else {
+                            const shift = (gapY / 2) * (centreY(a) <= centreY(b) ? -1 : 1);
+                            a.y += shift;
+                            b.y -= shift;
+                        }
+                    });
+                });
+            });
+
+            // Node against edge. The node moves, not the edge, so the layout keeps
+            // the shape it computed and only the node in the way steps aside.
+            if (clearEdges) edges.forEach((edge) => {
+                const px = centreX(edge.source);
+                const py = centreY(edge.source);
+                const length = Math.hypot(centreX(edge.target) - px, centreY(edge.target) - py);
+                if (length < 1) return;
+
+                const ux = (centreX(edge.target) - px) / length;
+                const uy = (centreY(edge.target) - py) / length;
+                const nx = -uy;
+                const ny = ux;
+
+                const seen = new Set();
+                for (let step = 0; step <= length; step += cell / 2) {
+                    const column = Math.floor((px + ux * step) / cell);
+                    const row = Math.floor((py + uy * step) / cell);
+                    for (let dx = -1; dx <= 1; dx += 1) {
+                        for (let dy = -1; dy <= 1; dy += 1) {
+                            const key = `${column + dx}:${row + dy}`;
+                            if (seen.has(key)) continue;
+                            seen.add(key);
+                            (buckets.get(key) || []).forEach((item) => {
+                                if (item === edge.source || item === edge.target) return;
+
+                                const along = (centreX(item) - px) * ux + (centreY(item) - py) * uy;
+                                if (along <= 0 || along >= length) return;
+
+                                const across = (centreX(item) - px) * nx + (centreY(item) - py) * ny;
+                                const half = item.halfWidth * Math.abs(nx) + item.halfHeight * Math.abs(ny);
+                                const needed = half - Math.abs(across);
+                                if (needed <= 0) return;
+
+                                passPushes += 1;
+                                const direction = across < 0 ? -1 : 1;
+                                item.x += nx * needed * direction;
+                                item.y += ny * needed * direction;
+                            });
+                        }
+                    }
+                }
+            });
+
+            pushes += passPushes;
+            if (passPushes === 0) break;
+        }
+
+        if (pushes > 0) {
+            this.cy.batch(() => {
+                items.forEach(item => item.node.position({ x: item.x, y: item.y }));
+            });
+        }
+
+        return pushes;
+    },
+
+    /**
+     * The drawn edges, as straight segments between two node centres, which is
+     * how cytoscape draws them.
+     */
+    edgeSegments() {
+        return this.cy.edges().filter(edge => this.isEdgeVisibleForLayout(edge)).map((edge) => {
+            const source = edge.source().position();
+            const target = edge.target().position();
+            return {
+                sourceId: edge.source().id(),
+                targetId: edge.target().id(),
+                x1: source.x, y1: source.y, x2: target.x, y2: target.y
+            };
+        });
+    },
+
+    segmentsCross(a, b) {
+        if (a.sourceId === b.sourceId || a.sourceId === b.targetId
+            || a.targetId === b.sourceId || a.targetId === b.targetId) return false;
+
+        const side = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        const d1 = side(a.x1, a.y1, a.x2, a.y2, b.x1, b.y1);
+        const d2 = side(a.x1, a.y1, a.x2, a.y2, b.x2, b.y2);
+        const d3 = side(b.x1, b.y1, b.x2, b.y2, a.x1, a.y1);
+        const d4 = side(b.x1, b.y1, b.x2, b.y2, a.x2, a.y2);
+        return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+    },
+
+    /**
+     * Bucket the segments by the cells they pass through, so a crossing is only
+     * looked for between segments that share a cell.
+     */
+    bucketSegments(segments, cell) {
+        const buckets = new Map();
+        segments.forEach((segment, index) => {
+            const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) || 1;
+            const steps = Math.max(1, Math.ceil(length / (cell / 2)));
+            const seen = new Set();
+            for (let step = 0; step <= steps; step += 1) {
+                const ratio = step / steps;
+                const key = `${Math.floor((segment.x1 + (segment.x2 - segment.x1) * ratio) / cell)}:`
+                    + `${Math.floor((segment.y1 + (segment.y2 - segment.y1) * ratio) / cell)}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const bucket = buckets.get(key);
+                if (bucket) bucket.push(index); else buckets.set(key, [index]);
+            }
+        });
+        return buckets;
+    },
+
+    /**
+     * How many pairs of drawn edges cross. Two edges that share an endpoint meet
+     * at a node by construction, so they do not count.
+     */
+    countEdgeCrossings(segments = this.edgeSegments()) {
+        const buckets = this.bucketSegments(segments, this.crossingGridCell);
+        const pairs = new Set();
+
+        buckets.forEach((bucket) => {
+            for (let i = 0; i < bucket.length; i += 1) {
+                for (let j = i + 1; j < bucket.length; j += 1) {
+                    const first = Math.min(bucket[i], bucket[j]);
+                    const second = Math.max(bucket[i], bucket[j]);
+                    const key = `${first}|${second}`;
+                    if (pairs.has(key)) continue;
+                    if (this.segmentsCross(segments[first], segments[second])) pairs.add(key);
+                }
+            }
+        });
+
+        return pairs.size;
+    },
+
+    /**
+     * Swap two neighbouring nodes when that removes more crossings than it adds.
+     * Only a node that takes part in a crossing is tried, and only against the
+     * nodes drawn near it, so the search stays local and short.
+     */
+    untangleEdges(maxPasses = 3) {
+        const nodes = this.getVisibleNodes();
+        if (nodes.length < 2) return 0;
+
+        const cell = this.crossingGridCell;
+        const positions = new Map(nodes.map(node => [node.id(), { x: node.position('x'), y: node.position('y') }]));
+        const edges = this.cy.edges().filter(edge => this.isEdgeVisibleForLayout(edge));
+
+        const incident = new Map();
+        edges.forEach((edge, index) => {
+            [edge.source().id(), edge.target().id()].forEach((id) => {
+                const list = incident.get(id);
+                if (list) list.push(index); else incident.set(id, [index]);
+            });
+        });
+
+        const segments = new Array(edges.length);
+        const rebuild = (index) => {
+            const edge = edges[index];
+            const source = positions.get(edge.source().id());
+            const target = positions.get(edge.target().id());
+            segments[index] = {
+                sourceId: edge.source().id(), targetId: edge.target().id(),
+                x1: source.x, y1: source.y, x2: target.x, y2: target.y
+            };
+        };
+        const cellKey = (position) => `${Math.floor(position.x / cell)}:${Math.floor(position.y / cell)}`;
+
+        let swaps = 0;
+
+        for (let pass = 0; pass < maxPasses; pass += 1) {
+            for (let index = 0; index < edges.length; index += 1) rebuild(index);
+            const buckets = this.bucketSegments(segments, cell);
+
+            const tangled = new Set();
+            buckets.forEach((bucket) => {
+                for (let i = 0; i < bucket.length; i += 1) {
+                    for (let j = i + 1; j < bucket.length; j += 1) {
+                        const a = segments[bucket[i]];
+                        const b = segments[bucket[j]];
+                        if (!this.segmentsCross(a, b)) continue;
+                        tangled.add(a.sourceId).add(a.targetId).add(b.sourceId).add(b.targetId);
+                    }
+                }
+            });
+            if (tangled.size === 0) break;
+
+            const nodeBuckets = new Map();
+            nodes.forEach((node) => {
+                const key = cellKey(positions.get(node.id()));
+                const bucket = nodeBuckets.get(key);
+                if (bucket) bucket.push(node); else nodeBuckets.set(key, [node]);
+            });
+
+            // The segments drawn in a cell and in the eight around it, kept per
+            // cell so a node pays for its neighbourhood only once.
+            const neighbourhoods = new Map();
+            const neighbourhood = (key) => {
+                const known = neighbourhoods.get(key);
+                if (known) return known;
+
+                const [column, row] = key.split(':').map(Number);
+                const found = new Set();
+                for (let dx = -1; dx <= 1; dx += 1) {
+                    for (let dy = -1; dy <= 1; dy += 1) {
+                        (buckets.get(`${column + dx}:${row + dy}`) || []).forEach(index => found.add(index));
+                    }
+                }
+                const list = [...found];
+                neighbourhoods.set(key, list);
+                return list;
+            };
+
+            let passSwaps = 0;
+
+            nodes.forEach((node) => {
+                if (!tangled.has(node.id())) return;
+
+                const own = incident.get(node.id()) || [];
+                if (own.length === 0) return;
+
+                const nodeKey = cellKey(positions.get(node.id()));
+                const partners = (nodeBuckets.get(nodeKey) || [])
+                    .filter(other => other !== node)
+                    .slice(0, this.untanglePartnerLimit);
+
+                partners.some((partner) => {
+                    const partnerEdges = incident.get(partner.id()) || [];
+                    const moved = own.concat(partnerEdges);
+                    const others = neighbourhood(nodeKey)
+                        .concat(neighbourhood(cellKey(positions.get(partner.id()))));
+
+                    // The swap moves these edges and no others, so only they are
+                    // rebuilt and the rest of the neighbourhood is read as it is.
+                    const crossings = () => {
+                        moved.forEach(rebuild);
+                        let total = 0;
+                        moved.forEach((index) => {
+                            const segment = segments[index];
+                            others.forEach((other) => {
+                                if (other === index) return;
+                                if (this.segmentsCross(segment, segments[other])) total += 1;
+                            });
+                        });
+                        return total;
+                    };
+
+                    const before = crossings();
+                    if (before === 0) return false;
+
+                    const here = positions.get(node.id());
+                    const there = positions.get(partner.id());
+                    positions.set(node.id(), there);
+                    positions.set(partner.id(), here);
+
+                    if (crossings() < before) {
+                        passSwaps += 1;
+                        return true;
+                    }
+
+                    positions.set(node.id(), here);
+                    positions.set(partner.id(), there);
+                    moved.forEach(rebuild);
+                    return false;
+                });
+            });
+
+            swaps += passSwaps;
+            if (passSwaps === 0) break;
+        }
+
+        if (swaps > 0) {
+            this.cy.batch(() => nodes.forEach(node => node.position(positions.get(node.id()))));
+        }
+
+        return swaps;
+    },
+
+    capturePositions() {
+        return this.cy.nodes().map(node => ({ node, x: node.position('x'), y: node.position('y') }));
+    },
+
+    restorePositions(saved) {
+        this.cy.batch(() => saved.forEach(item => item.node.position({ x: item.x, y: item.y })));
+    },
+
+    /**
+     * Tidy the drawn view when a layout ends. Each stage is kept only when it
+     * does not add edge crossings, so a layout that already orders its ranks,
+     * like dagre, is left as it is.
+     */
+    tidyLayout() {
+        if (!this.cy || this.getVisibleNodes().length < 2) return;
+
+        let crossings = this.countEdgeCrossings();
+
+        const stage = (run) => {
+            const saved = this.capturePositions();
+            run();
+            const after = this.countEdgeCrossings();
+            if (after > crossings) {
+                this.restorePositions(saved);
+                return;
+            }
+            crossings = after;
+        };
+
+        stage(() => this.separateOverlaps());
+        stage(() => {
+            this.untangleEdges();
+            this.separateOverlaps({ clearEdges: false });
+        });
     },
 
     /**
@@ -1570,18 +2933,23 @@ const GraphManager = {
 
     isNodeVisibleForLayout(node) {
         return !node.hasClass('hidden')
-            && !node.hasClass('gen-event-filtered')
-            && !node.hasClass('sim-vertex-key0-filtered')
             && !node.hasClass('parton-shower-filtered')
-            && !node.hasClass('small-subgraph-filtered');
+            && !node.hasClass('small-subgraph-filtered')
+            && !node.hasClass('reco-filtered');
     },
 
     isEdgeVisibleForLayout(edge) {
+        // Only the first working point anchors reco objects in the layout: it is the
+        // calorimeter-entry match, so the adaptive edges of the other points climb from
+        // there to an ancestor without moving the reco node.
+        if (edge.data('isMatchEdge')) {
+            const anchor = Array.isArray(this.workingPoints) ? this.workingPoints[0] : null;
+            if (anchor && edge.data('workingPoint') !== anchor) return false;
+        }
         return !edge.hasClass('hidden')
-            && !edge.hasClass('gen-event-filtered')
-            && !edge.hasClass('sim-vertex-key0-filtered')
             && !edge.hasClass('parton-shower-filtered')
             && !edge.hasClass('small-subgraph-filtered')
+            && !edge.hasClass('reco-filtered')
             && this.isNodeVisibleForLayout(edge.source())
             && this.isNodeVisibleForLayout(edge.target());
     },

@@ -11,7 +11,6 @@ The Python side has three jobs:
 Dependencies are listed in both `requirements.txt` and `preprocess/requirements.txt`:
 
 ```text
-pydot
 networkx
 particle
 uproot
@@ -40,7 +39,6 @@ Default DOT lookup when no argument is provided:
 
 `parse_graph.py` uses:
 
-- `pydot` for Graphviz DOT parsing.
 - `networkx` for an internal graph object during parsing.
 - `particle` for PDG ID to particle-name conversion.
 
@@ -253,7 +251,7 @@ TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9 ./visualizeTruthGraph myInputFile.root --no-se
 1. Resolves the selected DOT file from `--dot` or the default lookup list.
 2. Creates `venv/` if missing.
 3. Activates the virtual environment.
-4. Installs Python dependencies if `pydot` or `networkx` are unavailable.
+4. Installs Python dependencies if `networkx` is unavailable.
 5. Rebuilds `data/bundle.json` when missing, stale, or generated from a different DOT file.
 6. Writes `data/.bundle.source` with the absolute DOT path.
 7. Regenerates `app/js/bundle.js` when needed.

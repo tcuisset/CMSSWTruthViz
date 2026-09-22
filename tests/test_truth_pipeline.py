@@ -128,6 +128,9 @@ class TruthPipelineTests(unittest.TestCase):
             self.assertEqual(result.dot_path.name, "truthlogicalgraph_run1_lumi1_event8.dot")
             self.assertEqual(result.rechits_root_path.name, "rechits_nano.root")
             self.assertEqual(mock_run_checked.call_count, 2)
+            rechits_command = mock_run_checked.call_args_list[1].args[0]
+            event_index_flag = rechits_command.index("--event-index")
+            self.assertEqual(rechits_command[event_index_flag + 1], "0")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,26 @@ BRANCHES = {
     "z": "rechits_rechit_z",
 }
 
+# Further flat tables with the same four fields, read when the tree has them. The
+# truth-graph dump writes the HGCAL rechits as "rechits" and the barrel and forward
+# calorimeter PF rechits as "pfrechits"; a node in the barrel finds its hits only in
+# the second one.
+OPTIONAL_PREFIXES = ("pfrechits",)
+
+# Read when the table has it; the 3D panel shows it on hover.
+OPTIONAL_FIELDS = {"energy": "rechits_rechit_energy"}
+
+
+def detector_name(det_id):
+    """The subdetector of a CMS DetId, from its det and subdet fields."""
+    det = (int(det_id) >> 28) & 0xF
+    subdet = (int(det_id) >> 25) & 0x7
+    if det == 3:
+        return {1: "ECAL barrel", 2: "ECAL endcap", 3: "ES"}.get(subdet, "ECAL")
+    if det == 4:
+        return {1: "HCAL barrel", 2: "HCAL endcap", 3: "HO", 4: "HF"}.get(subdet, "HCAL")
+    return {1: "Tracker", 2: "Muon", 8: "HGCAL EE", 9: "HGCAL HSi", 10: "HGCAL HSc"}.get(det, "other")
+
 
 def to_float_list(values):
     """Convert one event branch payload to a plain JSON-safe float list."""
@@ -47,17 +67,35 @@ def load_event_rechits(root_path, tree_name="Events", event_index=0):
         if missing_branches:
             raise KeyError(f"Missing required branches: {', '.join(missing_branches)}")
 
+        # Every table whose four branches exist, the required one first. An optional
+        # field joins a table only when that table has it.
+        tables = []
+        for prefix in ("rechits",) + tuple(OPTIONAL_PREFIXES):
+            candidate = {key: branch.replace("rechits_", f"{prefix}_", 1) for key, branch in BRANCHES.items()}
+            if not all(branch in tree.keys() for branch in candidate.values()):
+                continue
+            for key, branch in OPTIONAL_FIELDS.items():
+                name = branch.replace("rechits_", f"{prefix}_", 1)
+                if name in tree.keys():
+                    candidate[key] = name
+            tables.append(candidate)
+
+        branch_names = [branch for table in tables for branch in table.values()]
         arrays = tree.arrays(
-            list(BRANCHES.values()),
+            branch_names,
             entry_start=event_index,
             entry_stop=event_index + 1,
             library="np",
         )
 
-    vectors = {
-        key: to_float_list(arrays[branch_name][0])
-        for key, branch_name in BRANCHES.items()
-    }
+    vectors = {key: [] for key in list(BRANCHES) + list(OPTIONAL_FIELDS)}
+    for table in tables:
+        count = len(arrays[table["ID"]][0])
+        for key in vectors:
+            if key in table:
+                vectors[key].extend(to_float_list(arrays[table[key]][0]))
+            else:
+                vectors[key].extend([0.0] * count)
 
     lengths = {key: len(values) for key, values in vectors.items()}
     if len(set(lengths.values())) != 1:
@@ -65,11 +103,12 @@ def load_event_rechits(root_path, tree_name="Events", event_index=0):
 
     rechits = [
         {
-            "ID": vectors["ID"][index],
+            "ID": int(vectors["ID"][index]),
             "x": vectors["x"][index],
             "y": vectors["y"][index],
             "z": vectors["z"][index],
-            "energy": 0.0,
+            "energy": vectors["energy"][index],
+            "detector": detector_name(vectors["ID"][index]),
         }
         for index in range(lengths["ID"])
     ]

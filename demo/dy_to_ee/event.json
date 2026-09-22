@@ -1,0 +1,10 @@
+{
+  "sample": "DYToLL_M_50_14TeV_TuneCP5",
+  "event": 3,
+  "nodes": 3147,
+  "reco": 43,
+  "preset": "-s 23,32 -d 1 -g 11,-11 --keepSpectators --attachSources",
+  "look": "a Z to two electrons, their bremsstrahlung photons, and the signal level on the Z",
+  "dot": "truthlogicalgraph_run1_lumi1_event3.dot.gz",
+  "eventIndex": 0
+}

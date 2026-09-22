@@ -2,6 +2,44 @@
  * plot3d.js - Plotly panel for selected-node direct rechits.
  */
 
+// The CMS envelope drawn behind the hits, in cm: radius of the muon system and half length
+// of the detector. The axis ranges are fixed to it, so the view keeps its scale from node
+// to node and the user zooms in or out instead.
+const CMS_RADIUS_CM = 750;
+const CMS_HALF_LENGTH_CM = 1300;
+
+// Subdetector envelopes drawn as transparent cylinders in the colour of their hits, cm,
+// Phase-2 layout: [name, radius, z from, z to, detector whose colour to use]. A pair of
+// entries with mirrored z draws both endcaps.
+const SUBDETECTOR_ENVELOPES = [
+    ['tracker', 112, -270, 270, 'Tracker'],
+    ['ECAL barrel', 152, -300, 300, 'ECAL barrel'],
+    ['HCAL barrel', 287, -430, 430, 'HCAL barrel'],
+    ['HGCAL CE-E', 260, 320, 364, 'HGCAL EE'],
+    ['HGCAL CE-E', 260, -364, -320, 'HGCAL EE'],
+    ['HGCAL CE-H', 260, 364, 520, 'HGCAL HSi'],
+    ['HGCAL CE-H', 260, -520, -364, 'HGCAL HSi'],
+    ['HF', 130, 1110, 1265, 'HF'],
+    ['HF', 130, -1265, -1110, 'HF']
+];
+
+// One colour and one marker per subdetector, so hits from different detectors tell apart.
+const DETECTOR_STYLE = {
+    'HGCAL EE': { color: '#1f77b4', symbol: 'circle' },
+    'HGCAL HSi': { color: '#17becf', symbol: 'diamond' },
+    'HGCAL HSc': { color: '#2ca02c', symbol: 'square' },
+    'ECAL barrel': { color: '#ff7f0e', symbol: 'circle-open' },
+    'ECAL endcap': { color: '#ffbb78', symbol: 'circle-open' },
+    'ES': { color: '#c49c94', symbol: 'cross' },
+    'HCAL barrel': { color: '#d62728', symbol: 'square-open' },
+    'HCAL endcap': { color: '#e377c2', symbol: 'square-open' },
+    'HO': { color: '#8c564b', symbol: 'cross' },
+    'HF': { color: '#9467bd', symbol: 'x' },
+    'Tracker': { color: '#7f7f7f', symbol: 'diamond-open' },
+    'Muon': { color: '#bcbd22', symbol: 'cross' },
+    'other': { color: '#555555', symbol: 'circle' }
+};
+
 const Plot3DPanelManager = {
     panel: null,
     plot: null,
@@ -134,37 +172,154 @@ const Plot3DPanelManager = {
         this.emptyState.classList.add('hidden');
         this.plot.classList.remove('hidden');
 
-        const trace = {
-            type: 'scatter3d',
-            mode: 'markers',
-            x: rechits.map(rechit => rechit.x),
-            y: rechits.map(rechit => rechit.y),
-            z: rechits.map(rechit => rechit.z),
-            text: rechits.map(rechit => String(rechit.ID)),
-            hovertemplate: 'ID %{text}<br>x=%{x:.3f}<br>y=%{y:.3f}<br>z=%{z:.3f}<extra></extra>',
-            marker: {
-                size: 4,
-                color: '#e74c3c',
-                opacity: 0.88
-            }
-        };
+        const traces = [this.envelopeTrace(), this.beamLineTrace(), ...this.subdetectorTraces(), ...this.hitTraces(rechits)];
 
+        const halfWidth = CMS_RADIUS_CM * 1.07;
+        const halfLength = CMS_HALF_LENGTH_CM * 1.05;
         const layout = {
             margin: { l: 0, r: 0, t: 0, b: 0 },
             paper_bgcolor: '#ffffff',
             scene: {
-                xaxis: { title: 'x' },
-                yaxis: { title: 'y' },
-                zaxis: { title: 'z' },
-                aspectmode: 'data'
+                xaxis: { title: 'x [cm]', range: [-halfWidth, halfWidth] },
+                yaxis: { title: 'y [cm]', range: [-halfWidth, halfWidth] },
+                zaxis: { title: 'z [cm]', range: [-halfLength, halfLength] },
+                // Fixed ranges and a manual aspect ratio keep the geometry undistorted and the
+                // scale the same for every node; the camera looks from the side, so the beam
+                // axis z runs horizontally and y points up.
+                aspectmode: 'manual',
+                aspectratio: { x: 1, y: 1, z: halfLength / halfWidth },
+                camera: {
+                    up: { x: 0, y: 1, z: 0 },
+                    eye: { x: 2.0, y: 0.6, z: 0.0 },
+                    center: { x: 0, y: 0, z: 0 }
+                },
+                dragmode: 'orbit'
             },
-            showlegend: false
+            legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 0.02 },
+            showlegend: true,
+            // Keep the camera the user set when another node is selected.
+            uirevision: 'hits'
         };
 
-        Plotly.react(this.plot, [trace], layout, {
+        Plotly.react(this.plot, traces, layout, {
             responsive: true,
             displaylogo: false
         });
+    },
+
+    hitTraces(rechits) {
+        const groups = new Map();
+        rechits.forEach(rechit => {
+            const detector = rechit.detector || this.detectorOf(rechit.ID);
+            if (!groups.has(detector)) {
+                groups.set(detector, []);
+            }
+            groups.get(detector).push(rechit);
+        });
+
+        return Array.from(groups.entries()).map(([detector, hits]) => {
+            const style = DETECTOR_STYLE[detector] || DETECTOR_STYLE.other;
+            return {
+                type: 'scatter3d',
+                mode: 'markers',
+                name: `${detector} (${hits.length})`,
+                x: hits.map(hit => hit.x),
+                y: hits.map(hit => hit.y),
+                z: hits.map(hit => hit.z),
+                text: hits.map(hit => `ID ${hit.ID}, E ${Number(hit.energy).toPrecision(3)} GeV`),
+                hovertemplate: `%{text}<br>x=%{x:.1f} y=%{y:.1f} z=%{z:.1f} cm<extra>${detector}</extra>`,
+                marker: {
+                    size: 3,
+                    color: style.color,
+                    symbol: style.symbol,
+                    opacity: 0.9
+                }
+            };
+        });
+    },
+
+    // An open cylinder of radius r between zFrom and zTo, as one transparent surface.
+    cylinderTrace(name, radius, zFrom, zTo, color, opacity, showlegend) {
+        const steps = 48;
+        const x = [];
+        const y = [];
+        const z = [];
+        [zFrom, zTo].forEach(zEnd => {
+            const ringX = [];
+            const ringY = [];
+            const ringZ = [];
+            for (let i = 0; i <= steps; i += 1) {
+                const angle = (2 * Math.PI * i) / steps;
+                ringX.push(radius * Math.cos(angle));
+                ringY.push(radius * Math.sin(angle));
+                ringZ.push(zEnd);
+            }
+            x.push(ringX);
+            y.push(ringY);
+            z.push(ringZ);
+        });
+
+        return {
+            type: 'surface',
+            name,
+            legendgroup: name,
+            x,
+            y,
+            z,
+            opacity,
+            showscale: false,
+            showlegend,
+            hoverinfo: 'skip',
+            colorscale: [[0, color], [1, color]],
+            contours: { x: { show: false }, y: { show: false }, z: { show: false } }
+        };
+    },
+
+    envelopeTrace() {
+        return this.cylinderTrace('CMS envelope', CMS_RADIUS_CM, -CMS_HALF_LENGTH_CM, CMS_HALF_LENGTH_CM, '#0033a0', 0.05, false);
+    },
+
+    // The subdetector cylinders, one legend entry per name so a pair of endcaps toggles together.
+    subdetectorTraces() {
+        const seen = new Set();
+        return SUBDETECTOR_ENVELOPES.map(([name, radius, zFrom, zTo, detector]) => {
+            const color = (DETECTOR_STYLE[detector] || DETECTOR_STYLE.other).color;
+            const first = !seen.has(name);
+            seen.add(name);
+            return this.cylinderTrace(name, radius, zFrom, zTo, color, 0.12, first);
+        });
+    },
+
+    beamLineTrace() {
+        return {
+            type: 'scatter3d',
+            mode: 'lines',
+            name: 'beam axis',
+            x: [0, 0],
+            y: [0, 0],
+            z: [-CMS_HALF_LENGTH_CM, CMS_HALF_LENGTH_CM],
+            line: { color: '#888888', width: 2, dash: 'dash' },
+            hoverinfo: 'skip',
+            showlegend: false
+        };
+    },
+
+    // The subdetector of a CMS DetId from its det and subdet fields, for rechit files
+    // written before the preprocessing recorded it.
+    detectorOf(id) {
+        const value = Number(id);
+        if (!Number.isFinite(value)) {
+            return 'other';
+        }
+        const det = Math.floor(value / 2 ** 28) & 0xF;
+        const subdet = Math.floor(value / 2 ** 25) & 0x7;
+        if (det === 3) {
+            return { 1: 'ECAL barrel', 2: 'ECAL endcap', 3: 'ES' }[subdet] || 'ECAL barrel';
+        }
+        if (det === 4) {
+            return { 1: 'HCAL barrel', 2: 'HCAL endcap', 3: 'HO', 4: 'HF' }[subdet] || 'HCAL barrel';
+        }
+        return { 1: 'Tracker', 2: 'Muon', 8: 'HGCAL EE', 9: 'HGCAL HSi', 10: 'HGCAL HSc' }[det] || 'other';
     },
 
     getSelectedHitIds(nodeData) {
@@ -202,7 +357,8 @@ const Plot3DPanelManager = {
             this.normalizeIdList(nodeData.directHitsDetIds).forEach(id => hitIds.add(String(id)));
 
             node.outgoers('edge').forEach(edge => {
-                if (edge.data('isPartonShowerBypass')) {
+                // Match edges lead to reco objects, which carry no hits of their own.
+                if (edge.data('isPartonShowerBypass') || edge.data('isMatchEdge')) {
                     return;
                 }
 
@@ -269,7 +425,8 @@ const Plot3DPanelManager = {
                 x: Number(rechit.x),
                 y: Number(rechit.y),
                 z: Number(rechit.z),
-                energy: Number(rechit.energy)
+                energy: Number(rechit.energy),
+                detector: rechit.detector || this.detectorOf(rechit.ID ?? rechit.id)
             }));
         }
 

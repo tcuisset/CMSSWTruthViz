@@ -1,0 +1,10 @@
+{
+  "sample": "TTbar_14TeV_TuneCP5",
+  "event": 7,
+  "nodes": 7701,
+  "reco": 216,
+  "preset": "-s 6,-6 -d 1 --keepSpectators --attachSources --keepProductionSiblings",
+  "look": "two tops, their b hadrons on the bHadrons level, 216 reco objects: the busiest event, and the one where the parton shower of the main event shows",
+  "dot": "truthlogicalgraph_run1_lumi1_event7.dot.gz",
+  "eventIndex": 0
+}

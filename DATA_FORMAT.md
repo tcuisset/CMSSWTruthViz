@@ -2,6 +2,22 @@
 
 The browser reads a graph bundle generated from a Graphviz DOT file. Optional rechit data can be loaded from a separate ROOT-derived JSON file.
 
+## Reading the DOT
+
+`preprocess/dot_reader.py` reads the DOT, gzipped or not. The dumper writes one
+statement per line, all node attributes in one bracket list and one HTML-like label per
+node, so the reader needs no general DOT grammar. It replaced `pydot`, which spent
+almost all of the preprocessing time: on the ttbar demo event, 7701 nodes in a 14 MB
+file, `pydot` takes 66 s and the reader takes 0.7 s, and the whole `build_bundle.py` run
+goes from 69 s to 2.2 s. The bundle is byte-identical, checked attribute by attribute
+against `pydot` on eleven graphs: the eight prepared events, a raw `TruthGraph` dump of
+7037 nodes and two older files.
+
+Loading the finished bundle is not the cost: `json.load` of the 26 MB ttbar bundle takes
+0.12 s. A JSON dump straight from the producer would therefore save the remaining 1.5 s
+of classification and writing, not more, unless it also carried the truth classification
+that `parse_graph.py` adds.
+
 ## Graph Bundle
 
 The main file is `data/bundle.json`:
@@ -50,6 +66,11 @@ Common optional fields include:
 - `p4`, `x4`, `m`, `energy`: physics quantities copied from DOT attributes.
 - `prodVtx`, `endVtx`, `nIn`, `nOut`: relationship and count fields copied from DOT attributes.
 - `hasGen`, `hasSim`, `crossedBoundary`, `directHitsDetIds`: truth-graph fields used by frontend styling or the 3D panel when present.
+- `truthKind`, `truthLevel`, `truthLevels`, `truthFootprint`, `truthRole`, `truthReason`,
+  `truthTitle`, `truthSubtitle`, `truthHover`: the truth-graph classification, added only
+  for a `TruthLogicalGraph` DOT. They carry the node kind, the dominant truth level, the
+  hit footprint, the role of an artificial vertex, the two-line label and the hover
+  summary. See FRONTEND.md for how each is drawn.
 - `shape`, `color`, `fillcolor`, `style`, `penwidth`, and other DOT styling attributes copied from the DOT file.
 
 The parser preserves most DOT attributes as flat node properties. The frontend therefore treats unknown attributes as displayable metadata and as fields usable by advanced search.

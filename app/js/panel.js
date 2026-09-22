@@ -142,6 +142,7 @@ const PanelManager = {
 
         this.displayParameters(parameters);
         this.displayConnectedNodes(nodeData.id);
+        this.displayMatchedRecoObjects(nodeData.id);
 
         this.displayRawDotLabel(nodeData);
     },
@@ -157,11 +158,20 @@ const PanelManager = {
             return;
         }
 
-        const towards = node.incomers('edge').map(edge => edge.source());
-        const away = node.outgoers('edge').map(edge => edge.target());
+        const towards = this.lineageEdges(node.incomers('edge')).map(edge => edge.source());
+        const away = this.lineageEdges(node.outgoers('edge')).map(edge => edge.target());
 
         this.displayConnectedNodeList('connected-towards-list', this.uniqueNodes(towards), 'towards');
         this.displayConnectedNodeList('connected-away-list', this.uniqueNodes(away), 'away');
+    },
+
+    /**
+     * Keep the truth lineage only. A match edge joins a reco object to the truth
+     * node the associator picked, which is not a parent or a child of it, so the
+     * ancestor and descendant lists leave it out.
+     */
+    lineageEdges(edges) {
+        return edges.filter(edge => !edge.data('isMatchEdge'));
     },
 
     /**
@@ -264,16 +274,71 @@ const PanelManager = {
         }
 
         const nextNodes = direction === 'towards'
-            ? node.incomers('edge').map(edge => edge.source())
-            : node.outgoers('edge').map(edge => edge.target());
+            ? this.lineageEdges(node.incomers('edge')).map(edge => edge.source())
+            : this.lineageEdges(node.outgoers('edge')).map(edge => edge.target());
 
         return this.uniqueNodes(nextNodes);
+    },
+
+    /**
+     * List the association matches of the selected node: the reco objects matched
+     * to a truth node, or the truth nodes a reco object matched. The section is
+     * hidden when the node has no match.
+     */
+    displayMatchedRecoObjects(nodeId) {
+        const section = document.getElementById('matched-reco-section');
+        const container = document.getElementById('matched-reco-list');
+        if (!section || !container) return;
+
+        container.innerHTML = '';
+        const node = GraphManager.cy?.getElementById(nodeId);
+        const matchEdges = (!node || node.length === 0)
+            ? []
+            : node.connectedEdges().filter(edge => edge.data('isMatchEdge'));
+
+        if (matchEdges.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+
+        const byNode = new Map();
+        matchEdges.forEach((edge) => {
+            const other = edge.source().id() === nodeId ? edge.target() : edge.source();
+            if (!byNode.has(other.id())) byNode.set(other.id(), { node: other, points: [] });
+            byNode.get(other.id()).points.push({
+                workingPoint: edge.data('workingPoint'),
+                score: edge.data('matchScore'),
+                sharedEnergy: edge.data('matchSharedEnergy')
+            });
+        });
+
+        byNode.forEach((entry) => {
+            const row = document.createElement('div');
+            row.className = 'connected-node-entry';
+            row.appendChild(this.createConnectedNodeButton(entry.node));
+
+            const points = document.createElement('div');
+            points.className = 'connected-node-sublist';
+            entry.points.forEach((point) => {
+                const line = document.createElement('div');
+                line.className = 'match-point';
+                line.textContent = `${point.workingPoint}: score ${Number(point.score).toFixed(3)},`
+                    + ` shared energy ${Number(point.sharedEnergy).toFixed(2)} GeV`;
+                points.appendChild(line);
+            });
+            row.appendChild(points);
+
+            container.appendChild(row);
+        });
     },
 
     /**
      * Short display kind for panel neighbor rows.
      */
     getNodeKindLabel(data) {
+        if (String(data.truthKind || '') === 'reco') return 'reco';
+
         const ele = this.makeDataAccessor(data);
         const kind = GraphManager.getNodeKind(ele);
         const normalized = String(kind || '').toLowerCase();
@@ -301,6 +366,10 @@ const PanelManager = {
     },
 
     getConnectedParticleName(data) {
+        if (String(data.truthKind || '') === 'reco') {
+            return `${GraphManager.shortCollectionName(data.recoCollection)} #${data.recoIndex}`;
+        }
+
         const isParticle = GraphManager.isParticleNode(this.makeDataAccessor(data));
         if (!isParticle) {
             return 'N/A';
@@ -328,6 +397,9 @@ const PanelManager = {
     },
 
     getEnergy(data) {
+        const rawEnergy = Number.parseFloat(data.rawEnergy);
+        if (Number.isFinite(rawEnergy)) return rawEnergy;
+
         return GraphManager.getNodeEnergy(this.makeDataAccessor(data));
     },
 

@@ -1,0 +1,10 @@
+{
+  "sample": "TenTau_E_15_500_pythia8",
+  "event": 4,
+  "nodes": 511,
+  "reco": 105,
+  "preset": "-s 15,-15 -d 0 --no-keepSpectators --attachSources",
+  "look": "ten taus, the decay mode read off the decay vertex, and 105 reco objects to follow through the working points",
+  "dot": "truthlogicalgraph_run1_lumi1_event4.dot.gz",
+  "eventIndex": 0
+}

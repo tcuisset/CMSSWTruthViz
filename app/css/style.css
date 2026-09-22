@@ -515,32 +515,47 @@ body {
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid #2c3e50;
     border-radius: 8px;
-    padding: 15px;
+    padding: 8px 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     z-index: 100;
-    min-width: 200px;
+    /* The legend stays narrow and its entries wrap, so it covers little canvas. */
+    width: 190px;
+    /* The truth legend carries four blocks, so it scrolls instead of growing past
+       the graph container and sliding under the controls bar. The percentage is
+       the height of #graph-container, not the window. */
+    max-height: calc(100% - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .legend-title {
     font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 10px;
+    font-size: 11px;
+    margin-bottom: 5px;
     color: #2c3e50;
     border-bottom: 1px solid #ddd;
-    padding-bottom: 5px;
+    padding-bottom: 3px;
 }
 
 .legend-item {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 8px 0;
-    font-size: 13px;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 3px 0;
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.legend-item span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .legend-color {
-    width: 20px;
-    height: 20px;
+    width: 13px;
+    height: 13px;
+    margin-top: 1px;
     border-radius: 3px;
     border: 1px solid #34495e;
     flex-shrink: 0;
@@ -559,23 +574,23 @@ body {
 }
 
 .legend-shape {
-    width: 20px;
-    height: 20px;
+    width: 13px;
+    height: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 12px;
     color: #34495e;
     flex-shrink: 0;
 }
 
 .legend-note {
-    margin-top: 10px;
-    padding-top: 10px;
+    margin-top: 6px;
+    padding-top: 6px;
     border-top: 1px solid #ddd;
-    font-size: 11px;
+    font-size: 9px;
     color: #666;
-    line-height: 1.5;
+    line-height: 1.4;
 }
 
 .legend-note strong {
@@ -1196,4 +1211,280 @@ body {
     .modal-content {
         width: 95%;
     }
+}
+
+#legend-toggle {
+    display: block;
+    width: 100%;
+    margin-bottom: 5px;
+    padding: 3px 6px;
+    background: #2c3e50;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+#legend-toggle::after {
+    content: ' \25BE';
+}
+
+#legend.collapsed #legend-toggle::after {
+    content: ' \25B8';
+}
+
+#legend.collapsed #legend-body {
+    display: none;
+}
+
+#legend.collapsed {
+    width: auto;
+}
+
+/* Truth-graph legend swatches. Shape swatches echo the node shapes on canvas,
+   and border swatches echo the hit footprint and the markers. */
+.legend-ellipse {
+    border-radius: 50%;
+}
+
+.legend-pentagon {
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+}
+
+.legend-rhomboid {
+    clip-path: polygon(22% 0%, 100% 0%, 78% 100%, 0% 100%);
+}
+
+.legend-rounded {
+    border-radius: 6px;
+}
+
+.legend-border-thick,
+.legend-border-medium,
+.legend-border-thin,
+.legend-border-dashed,
+.legend-border-double,
+.legend-border-checkpoint,
+.legend-border-backscattered {
+    background: #e8e8e8;
+    border-radius: 50%;
+}
+
+.legend-border-thick {
+    border: 5px solid #34495e;
+}
+
+.legend-border-medium {
+    border: 3px solid #34495e;
+}
+
+.legend-border-thin {
+    border: 2px solid #34495e;
+}
+
+.legend-border-dashed {
+    border: 1px dashed #34495e;
+}
+
+.legend-border-double {
+    border: 4px double #34495e;
+}
+
+.legend-border-checkpoint {
+    border: 3px solid #009988;
+}
+
+.legend-border-backscattered {
+    border: 3px solid #e76300;
+}
+
+/* This stylesheet defines .hidden per element rather than globally, so the
+   legend blocks and the GEN/SIM view options need their own rules. */
+#legend-truth.hidden,
+#legend-gensim.hidden,
+.checkbox-label.gensim-only.hidden,
+#node-tooltip.hidden {
+    display: none;
+}
+
+/* Hover summary. The canvas label stays at two lines and the rest appears here. */
+#node-tooltip {
+    position: fixed;
+    z-index: 300;
+    max-width: 340px;
+    padding: 8px 10px;
+    background: rgba(44, 62, 80, 0.96);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-line;
+    pointer-events: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Truth filters: the level check list and the energy threshold. */
+.checkbox-label.truth-only.hidden,
+#level-filter.hidden,
+.filter-note.truth-only.hidden {
+    display: none;
+}
+
+#energy-threshold-input {
+    width: 62px;
+    margin: 0 4px;
+    padding: 2px 4px;
+    border: 1px solid #bdc3c7;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+#level-filter {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #ddd;
+}
+
+.level-filter-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.level-filter-title button {
+    padding: 1px 6px;
+    background: #ecf0f1;
+    border: 1px solid #bdc3c7;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+#level-filter-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 190px;
+    overflow-y: auto;
+}
+
+.level-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+}
+
+.level-filter-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid #34495e;
+    flex-shrink: 0;
+}
+
+.filter-note {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #7f8c8d;
+    line-height: 1.35;
+}
+
+/* Control bar toggle. The bar folds away so the graph gets the whole window;
+   the button stays on top of the canvas so it can always be brought back. */
+#controls-toggle {
+    position: fixed;
+    top: 6px;
+    right: 8px;
+    z-index: 1100;
+    padding: 3px 9px;
+    background: rgba(44, 62, 80, 0.9);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+/* The control bar folds away, but the search box stays over the canvas, top left. */
+#app.controls-collapsed #controls {
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding: 6px 10px;
+    background: transparent;
+    box-shadow: none;
+    gap: 0;
+    z-index: 1100;
+}
+
+#app.controls-collapsed #controls > .controls-section {
+    display: none;
+}
+
+#app.controls-collapsed #main-controls {
+    display: flex;
+}
+
+#app.controls-collapsed #main-controls > * {
+    display: none;
+}
+
+#app.controls-collapsed #search-controls {
+    display: flex;
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    background: rgba(44, 62, 80, 0.92);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+#app.controls-collapsed #search-controls input[type="text"] {
+    flex: 0 0 200px;
+    min-width: 160px;
+}
+
+#app.controls-collapsed #advanced-search-panel:not(.hidden) {
+    display: flex;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: rgba(44, 62, 80, 0.92);
+    border-radius: 6px;
+}
+
+#app.controls-collapsed #controls-toggle {
+    background: rgba(44, 62, 80, 0.75);
+}
+
+/* Reco overlay controls and legend swatch. */
+#working-point-control {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #ddd;
+}
+
+#working-point-control.hidden,
+#matched-reco-section.hidden {
+    display: none;
+}
+
+#working-point-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.legend-match-edge {
+    background: transparent;
+    border: none;
+    border-top: 3px dashed #0d7d8c;
+    height: 0;
+    align-self: center;
 }

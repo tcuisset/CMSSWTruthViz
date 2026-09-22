@@ -1,0 +1,10 @@
+{
+  "sample": "ZEE_14TeV_TuneCP5",
+  "event": 3,
+  "nodes": 422,
+  "reco": 18,
+  "preset": "-s 23,32 -d 1 -g 11,-11 --keepSpectators --attachSources",
+  "look": "the Z, its two electrons and their bremsstrahlung photons; the match of an electron trackster moves from a boundary photon at Fixed to the electron branch at the adaptive points",
+  "dot": "truthlogicalgraph_run1_lumi1_event3.dot.gz",
+  "eventIndex": 3
+}

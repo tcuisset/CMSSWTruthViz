@@ -1,0 +1,10 @@
+{
+  "sample": "H125GGgluonfusion_14TeV_TuneCP5",
+  "event": 2,
+  "nodes": 2551,
+  "reco": 57,
+  "preset": "-s 25 -d 1 --keepSpectators --attachSources",
+  "look": "the two photons of the Higgs, the signal level on the Higgs itself, and the whole underlying event the spectators bring in",
+  "dot": "truthlogicalgraph_run1_lumi1_event2.dot.gz",
+  "eventIndex": 0
+}

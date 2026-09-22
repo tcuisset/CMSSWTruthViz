@@ -1,0 +1,10 @@
+{
+  "sample": "DYToLL_M_50_14TeV_TuneCP5",
+  "event": 7,
+  "nodes": 470,
+  "reco": 9,
+  "preset": "-s 23,32 -d 1 -g 15,-15 --keepSpectators --attachSources",
+  "look": "a Z to two taus, one hadronic and one leptonic, on the two new tau levels; the fastest event to open",
+  "dot": "truthlogicalgraph_run1_lumi1_event7.dot.gz",
+  "eventIndex": 0
+}

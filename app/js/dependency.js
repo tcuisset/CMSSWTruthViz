@@ -123,6 +123,14 @@ const DependencyExplorer = {
     },
 
     /**
+     * A match edge joins a reco object to the truth node the associator picked.
+     * It is not a lineage edge, so no walk of ancestors or descendants follows it.
+     */
+    lineageEdges(edges) {
+        return edges.filter(edge => !edge.data('isMatchEdge'));
+    },
+
+    /**
      * Get dependencies using BFS
      */
     getDependencies(centerNodes, depth, direction) {
@@ -136,14 +144,15 @@ const DependencyExplorer = {
             const nextLevel = GraphManager.cy.collection();
 
             currentLevel.forEach(node => {
+                const lineage = this.lineageEdges(node.connectedEdges());
                 let neighbors;
 
                 if (direction === 'downstream') {
-                    neighbors = node.outgoers('node');
+                    neighbors = lineage.filter(edge => edge.source().id() === node.id()).map(edge => edge.target());
                 } else if (direction === 'upstream') {
-                    neighbors = node.incomers('node');
+                    neighbors = lineage.filter(edge => edge.target().id() === node.id()).map(edge => edge.source());
                 } else {
-                    neighbors = node.neighborhood('node');
+                    neighbors = lineage.map(edge => (edge.source().id() === node.id() ? edge.target() : edge.source()));
                 }
 
                 neighbors.forEach(neighbor => {
@@ -159,15 +168,15 @@ const DependencyExplorer = {
 
                 if (direction === 'downstream') {
                     connectedEdges = node.connectedEdges().filter(edge => {
-                        return edge.source().id() === node.id() && visited.has(edge.target().id());
+                        return !edge.data('isMatchEdge') && edge.source().id() === node.id() && visited.has(edge.target().id());
                     });
                 } else if (direction === 'upstream') {
                     connectedEdges = node.connectedEdges().filter(edge => {
-                        return edge.target().id() === node.id() && visited.has(edge.source().id());
+                        return !edge.data('isMatchEdge') && edge.target().id() === node.id() && visited.has(edge.source().id());
                     });
                 } else {
                     connectedEdges = node.connectedEdges().filter(edge => {
-                        return visited.has(edge.source().id()) && visited.has(edge.target().id());
+                        return !edge.data('isMatchEdge') && visited.has(edge.source().id()) && visited.has(edge.target().id());
                     });
                 }
 

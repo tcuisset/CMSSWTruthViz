@@ -22,6 +22,7 @@ Visual encodings include:
 Use the layout selector in the header:
 
 - Dagre: hierarchical layout, default.
+- ForceAtlas2: the Gephi force-directed layout, with Barnes-Hut repulsion.
 - fCoSE: force-directed layout.
 - ELK: layered layout with orthogonal routing.
 
@@ -53,8 +54,9 @@ Multiple results can be stepped through with the previous/next controls.
 Click a node to open the side panel. It shows:
 
 - Node ID, particle name, PDG ID, energy, and momentum-like fields when available.
-- Ancestors and descendants.
 - Rendered DOT label.
+- Ancestors and descendants, along the truth lineage only.
+- Association matches, when the node has any.
 - All copied DOT attributes.
 - Breadcrumb navigation history.
 
@@ -82,13 +84,13 @@ The link controls show directed context around the selected node:
 
 Depth controls how many link steps are followed.
 
-## Default Visibility Filters
+## Visibility Filters
 
-Header checkboxes can hide:
+Every filter starts off. Header checkboxes can hide:
 
 - GenEvent nodes.
 - `SimVertex` nodes with `key=0`.
-- Parton-shower status-2 gluons, while preserving continuity with bypass edges.
+- The parton shower: soft gluons, the status window, and the strings, clusters and diquarks the main event carries.
 - Disconnected components with fewer than 10 nodes.
 
 ## 3D Rechit View

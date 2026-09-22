@@ -1,0 +1,10 @@
+{
+  "sample": "VBFHZZ4Nu_TuneCP5_14TeV_pythia8",
+  "event": 1,
+  "nodes": 1368,
+  "reco": 47,
+  "preset": "-s 25 -d 1 --keepSpectators --attachSources --keepProductionSiblings",
+  "look": "the Higgs decays to four neutrinos, leaves with no hits; the two tagging jets and their tracksters",
+  "dot": "truthlogicalgraph_run1_lumi1_event1.dot.gz",
+  "eventIndex": 0
+}
