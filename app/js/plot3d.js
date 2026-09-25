@@ -151,7 +151,14 @@ const Plot3DPanelManager = {
             return;
         }
 
-        const nodeData = GraphManager.getBundleNode(nodeId);
+        // Reco/association nodes are added to Cytoscape after the graph bundle
+        // loads, so they are intentionally absent from bundle.json. They still
+        // represent a valid selection; let the normal no-hit state explain that
+        // they carry no direct/subgraph DetIds instead of reporting a bundle
+        // lookup error.
+        const node = GraphManager.cy?.getElementById(nodeId);
+        const nodeData = GraphManager.getBundleNode(nodeId)
+            || (node && node.length > 0 ? node.data() : null);
         if (!nodeData) {
             this.showEmptyState('Selected node is not available in the bundle');
             return;

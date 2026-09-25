@@ -176,6 +176,11 @@ process = _namespace["process"]
 process.load("Configuration.StandardSequences.Services_cff")
 process.options.accelerators = cms.untracked.vstring("*")
 process.source.skipEvents = cms.untracked.uint32({options.event_index})
+# The interactive rechit panel matches the ROOT-exported coordinates to the
+# DetIds written on logical-graph particles.  The CMSSW dumper defaults to
+# omitting that list, which leaves hit counts in the DOT but nothing for the
+# browser to select.
+process.truthLogicalGraphDumper.dumpSimHits = cms.bool(True)
 """,
         encoding="utf-8",
     )

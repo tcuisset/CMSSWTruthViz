@@ -38,6 +38,7 @@ class TruthPipelineTests(unittest.TestCase):
             self.assertIn("'-n', '1'", content)
             self.assertIn("--no-keepSpectators", content)
             self.assertIn("process.source.skipEvents = cms.untracked.uint32(7)", content)
+            self.assertIn("process.truthLogicalGraphDumper.dumpSimHits = cms.bool(True)", content)
 
     def test_cmsrun_command_runs_wrapper_config_only(self):
         command = truth_pipeline.cmsrun_command(
