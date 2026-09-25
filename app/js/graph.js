@@ -89,9 +89,6 @@ const GraphManager = {
         stableLegsFromUpstream: '#3f90da',
         none: '#e8e8e8'
     },
-    // Names the dumper wrote before the rename. They are listed in the filters and in
-    // the legend only when the graph on screen carries them.
-    truthLegacyLevels: new Set(['visibleTau', 'stableLegsFromUpstream']),
     truthLevelDarkFills: new Set([
         '#bd1f01', '#e76300', '#832db6', '#3f90da', '#a96b59', '#717581', '#d35fb7'
     ]),
@@ -1342,6 +1339,11 @@ const GraphManager = {
      * Build the level check list and wire every truth filter control.
      */
     setupTruthFilters() {
+        const levelFilter = document.getElementById('level-filter');
+        if (levelFilter && this.isLogicalGraph()) {
+            levelFilter.classList.remove('hidden');
+        }
+
         const pileup = document.getElementById('hide-pileup-checkbox');
         if (pileup) {
             pileup.checked = this.hidePileup;
@@ -1405,15 +1407,24 @@ const GraphManager = {
     },
 
     /**
-     * The levels the filter list and the legend show: the current vocabulary, plus
-     * an older name only when the graph on screen still uses it.
+     * The dominant levels the filter list and the legend show. Filtering uses the
+     * dominant level as a partition, so a level carried only as a secondary tag
+     * must not be presented as a control that appears to filter independently.
      */
     levelsForControls() {
         const present = new Set();
         if (this.cy) {
-            this.cy.nodes().forEach(node => this.truthLevelsOf(node).forEach(level => present.add(level)));
+            this.cy.nodes().forEach(node => {
+                if (this.truthKind(node) === 'particle') {
+                    present.add(this.truthLevel(node));
+                }
+            });
         }
-        return [...this.truthLevelOrder.filter(level => !this.truthLegacyLevels.has(level) || present.has(level)), 'none'];
+        const levels = this.truthLevelOrder.filter(level => present.has(level));
+        // Keep a visible control even for a logical bundle whose particles carry
+        // no level metadata yet; that value is still a valid filter category.
+        if (present.has('none') || levels.length === 0) levels.push('none');
+        return levels;
     },
 
     /**
