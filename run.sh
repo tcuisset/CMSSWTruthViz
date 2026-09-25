@@ -151,6 +151,107 @@ fi
 echo ""
 
 CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+
+# Catalogue processing needs a regular CMSSW project containing the TruthInfo
+# dumper. Keep the local launcher consistent with the container entrypoint:
+# use an explicitly configured runtime first, then reuse or create a managed
+# pre3 project under data/cmssw.
+CMSSW_RELEASE="${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
+CMSSW_SCRAM_ARCH="${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
+CMSSW_INSTALL_ROOT="${TRUTHVIZ_CMSSW_INSTALL_ROOT:-$SCRIPT_DIR/data/cmssw}"
+
+find_cmssw_src() {
+    local root="$1"
+    local candidate="$root/$CMSSW_RELEASE/src"
+    if [ -f "$candidate/PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+    return 1
+}
+
+install_cmssw_release() {
+    local project_dir="$CMSSW_INSTALL_ROOT/$CMSSW_RELEASE"
+
+    if [ ! -d "$project_dir/.SCRAM" ]; then
+        if [ -e "$project_dir" ]; then
+            echo "Error: incomplete CMSSW project already exists: $project_dir" >&2
+            echo "Remove it or select another TRUTHVIZ_CMSSW_INSTALL_ROOT before retrying." >&2
+            return 1
+        fi
+        (
+            cd "$CMSSW_INSTALL_ROOT"
+            scram project CMSSW "$CMSSW_RELEASE"
+        )
+    fi
+
+    (
+        cd "$project_dir/src"
+        eval "$(scram runtime -sh)"
+        release_truth_info="$CMSSW_RELEASE_BASE/src/PhysicsTools/TruthInfo"
+        if [ ! -f "$release_truth_info/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
+            echo "Error: PhysicsTools/TruthInfo is missing from $CMSSW_RELEASE_BASE" >&2
+            exit 1
+        fi
+        mkdir -p PhysicsTools
+        if [ ! -e PhysicsTools/TruthInfo ]; then
+            ln -s "$release_truth_info" PhysicsTools/TruthInfo
+        fi
+    )
+}
+
+if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
+    export SCRAM_ARCH="$CMSSW_SCRAM_ARCH"
+
+    if found_src="$(find_cmssw_src "$SCRIPT_DIR/..")"; then
+        export TRUTHVIZ_CMSSW_SRC="$found_src"
+        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    elif found_src="$(find_cmssw_src "$SCRIPT_DIR")"; then
+        export TRUTHVIZ_CMSSW_SRC="$found_src"
+        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    elif found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+        export TRUTHVIZ_CMSSW_SRC="$found_src"
+        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != "1" ] && [ -r "$CMSSET_DEFAULT" ]; then
+        mkdir -p "$CMSSW_INSTALL_ROOT"
+        install_lock="$CMSSW_INSTALL_ROOT/.install-$CMSSW_RELEASE.lock"
+        until mkdir "$install_lock" 2>/dev/null; do
+            echo "Waiting for CMSSW install lock: $install_lock"
+            sleep 10
+            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+                export TRUTHVIZ_CMSSW_SRC="$found_src"
+                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+                break
+            fi
+        done
+
+        if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
+            trap 'rmdir "$install_lock" 2>/dev/null || true' EXIT
+            export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+            # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
+            source "$CMSSET_DEFAULT"
+            if ! command -v scram >/dev/null 2>&1; then
+                echo "Error: scram was not found after sourcing $CMSSET_DEFAULT" >&2
+                exit 1
+            fi
+            echo "Installing $CMSSW_RELEASE ($SCRAM_ARCH) in $CMSSW_INSTALL_ROOT"
+            install_cmssw_release
+            rmdir "$install_lock" 2>/dev/null || true
+            trap - EXIT
+
+            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
+                export TRUTHVIZ_CMSSW_SRC="$found_src"
+                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+            else
+                echo "Error: CMSSW install completed but no source area was found in $CMSSW_INSTALL_ROOT" >&2
+                exit 1
+            fi
+        fi
+    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != "1" ]; then
+        echo "Warning: $CMSSET_DEFAULT is unavailable; catalogue processing will need TRUTHVIZ_CMSSW_SRC or CMSSW_BASE." >&2
+    fi
+fi
+
 if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
     if [ -r "$CMSSET_DEFAULT" ]; then
         export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"

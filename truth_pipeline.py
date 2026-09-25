@@ -86,9 +86,14 @@ def resolve_cmssw_src(explicit: str | Path | None = None) -> Path:
     if cmssw_base:
         return Path(cmssw_base).expanduser().resolve() / "src"
 
-    app_local_src = PROJECT_ROOT / DEFAULT_CMSSW_RELEASE / "src"
-    if app_local_src.exists():
-        return app_local_src.resolve()
+    local_candidates = (
+        PROJECT_ROOT / DEFAULT_CMSSW_RELEASE / "src",
+        PROJECT_ROOT / "data" / "cmssw" / DEFAULT_CMSSW_RELEASE / "src",
+        DEFAULT_CMSSW_SRC,
+    )
+    for candidate in local_candidates:
+        if candidate.exists():
+            return candidate.resolve()
 
     return DEFAULT_CMSSW_SRC.resolve()
 
@@ -111,7 +116,11 @@ def parse_dumper_args(args_text: str | None) -> list[str]:
 
 def validate_cmssw_src(cmssw_src: Path) -> None:
     if not cmssw_src.exists():
-        raise PipelineError(f"CMSSW src directory does not exist: {cmssw_src}")
+        raise PipelineError(
+            f"CMSSW src directory does not exist: {cmssw_src}. "
+            "Set TRUTHVIZ_CMSSW_SRC to a CMSSW_20_1_0_pre3/src directory "
+            "or start the app with ./run.sh while CVMFS is mounted."
+        )
     cfg = cmssw_src / "PhysicsTools" / "TruthInfo" / "test" / "dumpTruthGraphsFromGENSIMRECO_cfg.py"
     if not cfg.exists():
         raise PipelineError(f"CMSSW dumper config not found: {cfg}")
@@ -147,15 +156,25 @@ def write_cmsrun_wrapper_config(
 import runpy
 import sys
 import FWCore.ParameterSet.Config as cms
+from Configuration.ProcessModifiers.alpaka_cff import alpaka
 
 _original_argv = sys.argv[:]
 sys.argv = [{str(wrapper_path)!r}] + {args!r}
+_original_process = cms.Process
+class _AlpakaProcess(_original_process):
+    def __init__(self, *process_args, **process_kwargs):
+        super().__init__(*process_args, alpaka, **process_kwargs)
+
+cms.Process = _AlpakaProcess
 try:
     _namespace = runpy.run_path({str(cfg_path)!r})
 finally:
+    cms.Process = _original_process
     sys.argv = _original_argv
 
 process = _namespace["process"]
+process.load("Configuration.StandardSequences.Services_cff")
+process.options.accelerators = cms.untracked.vstring("*")
 process.source.skipEvents = cms.untracked.uint32({options.event_index})
 """,
         encoding="utf-8",

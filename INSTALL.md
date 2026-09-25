@@ -31,11 +31,13 @@ CMSSW `src` directory in this order:
 1. the `--cmssw-src` option of `visualizeTruthGraph`
 2. `TRUTHVIZ_CMSSW_SRC`
 3. `CMSSW_BASE/src`
-4. the sibling release directory of this checkout
+4. the local managed project under `data/cmssw`
+5. the sibling release directory of this checkout
 
-The sibling release name defaults to `CMSSW_20_1_0_pre3` and is overridden with
-`TRUTHVIZ_CMSSW_RELEASE`. Put the viewer checkout and the CMSSW area side by side to
-use the default:
+The release name defaults to `CMSSW_20_1_0_pre3` and is overridden with
+`TRUTHVIZ_CMSSW_RELEASE`. `run.sh` reuses or creates a managed project under
+`data/cmssw` when CVMFS is available. You can also put the viewer checkout and
+the CMSSW area side by side to use an existing project:
 
 ```text
 <work area>/
@@ -73,10 +75,12 @@ Use a specific DOT file:
 2. Creates `venv/` if it does not exist.
 3. Activates the virtual environment.
 4. Installs Python dependencies from `preprocess/requirements.txt` if needed.
-5. Builds `data/bundle.json` from the selected DOT file when missing or stale.
-6. Records the source DOT path in `data/.bundle.source`.
-7. Generates `app/js/bundle.js` for static mode.
-8. Starts `server.py`.
+5. Reuses or creates the configured CMSSW release under `data/cmssw` when no
+   `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
+6. Builds `data/bundle.json` from the selected DOT file when missing or stale.
+7. Records the source DOT path in `data/.bundle.source`.
+8. Generates `app/js/bundle.js` for static mode.
+9. Starts `server.py`.
 
 Default DOT lookup:
 

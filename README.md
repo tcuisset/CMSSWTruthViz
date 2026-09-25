@@ -35,7 +35,10 @@ chmod +x run.sh
 ./run.sh
 ```
 
-`run.sh` creates `venv/` if needed, installs Python dependencies, builds `data/bundle.json` from the selected DOT file, generates `app/js/bundle.js` for static mode, and starts `server.py`.
+`run.sh` creates `venv/` if needed, installs Python dependencies, prepares or
+reuses a managed `CMSSW_20_1_0_pre3` project under `data/cmssw` when needed,
+builds `data/bundle.json` from the selected DOT file, generates
+`app/js/bundle.js` for static mode, and starts `server.py`.
 
 By default it looks for the first existing file from:
 
@@ -64,7 +67,8 @@ To generate viewer inputs directly from a CMSSW EDM ROOT file:
 ```
 
 This requires a CMSSW runtime with the TruthInfo plugins available. The script
-uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, or the sibling
+uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, the managed
+`data/cmssw/CMSSW_20_1_0_pre3/src` project, or the sibling
 `CMSSW_20_1_0_pre3/src` checkout.
 
 ## Static Mode

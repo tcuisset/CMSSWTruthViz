@@ -254,9 +254,11 @@ TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9 ./visualizeTruthGraph myInputFile.root --no-se
 2. Creates `venv/` if missing.
 3. Activates the virtual environment.
 4. Installs Python dependencies if `networkx` is unavailable.
-5. Rebuilds `data/bundle.json` when missing, stale, or generated from a different DOT file.
-6. Writes `data/.bundle.source` with the absolute DOT path.
-7. Regenerates `app/js/bundle.js` when needed.
-8. Starts `server.py`.
+5. Reuses or creates the configured CMSSW release under `data/cmssw` when no
+   `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
+6. Rebuilds `data/bundle.json` when missing, stale, or generated from a different DOT file.
+7. Writes `data/.bundle.source` with the absolute DOT path.
+8. Regenerates `app/js/bundle.js` when needed.
+9. Starts `server.py`.
 
 The banner still contains some historical wording, but the app it starts is the Truth Graph Viewer.

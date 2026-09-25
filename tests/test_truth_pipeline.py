@@ -82,6 +82,16 @@ class TruthPipelineTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, {}, clear=True):
                     self.assertEqual(truth_pipeline.resolve_cmssw_src(), app_local_src.resolve())
 
+    def test_resolve_cmssw_src_finds_managed_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp) / "CMSSWGraphViz"
+            managed_src = project_root / "data" / "cmssw" / truth_pipeline.DEFAULT_CMSSW_RELEASE / "src"
+            managed_src.mkdir(parents=True)
+
+            with mock.patch.object(truth_pipeline, "PROJECT_ROOT", project_root):
+                with mock.patch.dict(os.environ, {}, clear=True):
+                    self.assertEqual(truth_pipeline.resolve_cmssw_src(), managed_src.resolve())
+
     def test_load_catalog_requires_samples_list(self):
         with tempfile.TemporaryDirectory() as tmp:
             catalog = Path(tmp) / "catalog.json"
