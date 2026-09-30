@@ -66,6 +66,12 @@ body {
     align-self: start;
 }
 
+#main-controls > .control-group:not([open]) {
+    width: max-content;
+    max-width: 100%;
+    justify-self: start;
+}
+
 .control-group {
     min-width: 0;
     position: relative;
