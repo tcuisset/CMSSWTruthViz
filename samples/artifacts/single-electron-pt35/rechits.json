@@ -173386,7 +173386,7 @@
     }
   ],
   "metadata": {
-    "source": "rechits_nano.root",
+    "source": "/tmp/truthviz-catalog-single-electron-pt35-nr2olozq/jobs/1790776519-c093035d/cmssw/rechits_nano.root",
     "tree": "Events",
     "event_index": 0,
     "rechit_count": 21673,

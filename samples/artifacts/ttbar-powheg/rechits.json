@@ -259402,7 +259402,7 @@
     }
   ],
   "metadata": {
-    "source": "rechits_nano.root",
+    "source": "/tmp/truthviz-catalog-ttbar-powheg-mrt079au/jobs/1790776564-4169597e/cmssw/rechits_nano.root",
     "tree": "Events",
     "event_index": 0,
     "rechit_count": 32425,

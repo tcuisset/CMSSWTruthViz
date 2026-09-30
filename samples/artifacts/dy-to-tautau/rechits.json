@@ -163002,7 +163002,7 @@
     }
   ],
   "metadata": {
-    "source": "rechits_nano.root",
+    "source": "/tmp/truthviz-catalog-dy-to-tautau-53z6ullf/jobs/1790776543-edce16c2/cmssw/rechits_nano.root",
     "tree": "Events",
     "event_index": 0,
     "rechit_count": 20375,
