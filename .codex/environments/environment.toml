@@ -3,7 +3,10 @@ version = 1
 name = "CMSSWGraphViz"
 
 [setup]
-script = "TRUTHVIZ_SERVER_PORT=8015 docker compose up --build -d --wait"
+script = '''
+npm ci --ignore-scripts --no-audit --no-fund
+npm run vendor
+'''
 
 [cleanup]
 script = "docker compose down"
