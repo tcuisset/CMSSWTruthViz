@@ -1,0 +1,44 @@
+services:
+  truthviz:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /workspace
+    user: "${TRUTHVIZ_UID:-1000}:${TRUTHVIZ_GID:-1000}"
+    init: true
+    environment:
+      HOME: /tmp
+      CMSSET_DEFAULT: /cvmfs/cms.cern.ch/cmsset_default.sh
+      SITECONFIG_PATH: /cvmfs/cms.cern.ch/SITECONF/T2_CH_CERN/
+      SCRAM_ARCH: "${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
+      TRUTHVIZ_CMSSW_RELEASE: "${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
+      TRUTHVIZ_SCRAM_ARCH: "${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
+      TRUTHVIZ_CMSSW_SRC: /cvmfs/cms.cern.ch/el9_amd64_gcc14/cms/cmssw/CMSSW_20_1_0_pre3/src
+      TRUTHVIZ_SERVER_HOST: 0.0.0.0
+      TRUTHVIZ_SERVER_PORT: "${TRUTHVIZ_SERVER_PORT:-8009}"
+      TRUTHVIZ_SERVER_AUTO_FIND_PORT: "0"
+    ports:
+      - "${TRUTHVIZ_SERVER_PORT:-8009}:${TRUTHVIZ_SERVER_PORT:-8009}"
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - type: bind
+        source: /cvmfs/cms.cern.ch
+        target: /cvmfs/cms.cern.ch
+        read_only: true
+      # The nested CVMFS mount must be bound explicitly for the release tree
+      # to be visible from the container.
+      - type: bind
+        source: /cvmfs/cms.cern.ch/el9_amd64_gcc14
+        target: /cvmfs/cms.cern.ch/el9_amd64_gcc14
+        read_only: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent
+          http://127.0.0.1:$${TRUTHVIZ_SERVER_PORT}/app/ >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
