@@ -27,8 +27,31 @@ These paths are ignored intentionally. Preserve supplied ROOT, DOT, demo, and
 catalogue assets unless the task explicitly changes them.
 
 ## Required full-functionality environment
+The application runs inside Docker on container port 3000.
 
-Use `compose.yaml` with `Dockerfile.dev` for development. The development
+The host port is dynamically allocated by Docker. Never assume that the
+application is available on port 3000.
+
+Start the application with:
+
+    ./dev full-setup
+
+To obtain the current browser URL, always run:
+
+    ./dev url
+
+Use the returned URL for browser-based validation.
+
+Example:
+
+    $ ./dev url
+    http://localhost:49157
+
+Do not inspect Docker port mappings manually unless debugging the `dev`
+script itself.
+
+### Details
+The development
 image is based on `cmssw/el9:x86_64` but deliberately does not copy the
 repository; Compose bind-mounts the working tree into `/workspace`, so source
 edits are immediately visible to the running server. The checked-in
@@ -50,33 +73,6 @@ The dev container also sets `SITECONFIG_PATH` explicitly; without it, a real
 ROOT upload can fail in `SiteLocalConfigService` even though the web server and
 catalogue path are healthy.
 
-Start the development server from the repository root:
-
-```bash
-TRUTHVIZ_UID="$(id -u)" TRUTHVIZ_GID="$(id -g)" \
-  docker compose up --build
-```
-
-The Compose service binds `0.0.0.0:8009` inside the container and publishes it
-on the same host port, so the viewer is available at
-`http://localhost:8009/app/`. Use a different port when needed:
-
-```bash
-TRUTHVIZ_UID="$(id -u)" TRUTHVIZ_GID="$(id -g)" \
-TRUTHVIZ_SERVER_PORT=18009 docker compose up --build
-```
-
-For a background run and internal diagnostics:
-
-```bash
-TRUTHVIZ_UID="$(id -u)" TRUTHVIZ_GID="$(id -g)" \
-  docker compose up --build --detach
-docker compose ps
-docker compose logs -f truthviz
-docker compose exec truthviz \
-  curl --fail --silent http://127.0.0.1:8009/app/
-docker compose down
-```
 
 Compose uses the current worktree as the source of truth. `run.sh` creates or
 reuses the ignored `venv/` and the server's ignored runtime data under `data/`.
@@ -86,11 +82,7 @@ check; a successful API response alone does not prove that the browser UI
 loaded. For a deployment-style test of the copy-into-image path, use the
 image entrypoint (`.s2i/bin/run`) separately.
 
-Stop the Compose service after testing:
 
-```bash
-docker compose down
-```
 
 ## Validation gates
 

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+service="truthviz"
+container_port=3000
+
+get_port() {
+    docker compose port "$service" "$container_port" |
+        head -n1 |
+        sed 's/.*://'
+}
+
+get_url() {
+    port="$(get_port)"
+    echo "http://localhost:${port}"
+}
+
+case "${1:-}" in
+  full-setup)
+    docker compose up --build -d --wait
+    echo
+    echo "Application running at:"
+    get_url
+    ;;
+  build)
+    docker compose build
+    ;;
+  test)
+    docker compose run --rm $service pytest
+    ;;
+  start)
+    docker compose up -d --build
+    ;;
+    shell)
+        docker compose exec "$service" bash
+        ;;
+  logs)
+    docker compose logs --tail=200 $service
+    ;;
+    port)
+        get_port
+        ;;
+
+    url)
+        get_url
+        ;;
+  stop)
+    docker compose down
+    ;;
+esac
