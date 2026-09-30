@@ -1464,6 +1464,8 @@ const GraphManager = {
 
         const apply = () => {
             const collapsed = app.classList.contains('controls-collapsed');
+            const searchControls = document.getElementById('search-controls');
+            if (collapsed && searchControls) searchControls.open = true;
             toggle.setAttribute('aria-expanded', String(!collapsed));
             toggle.textContent = collapsed ? 'Show controls' : 'Hide controls';
             if (this.cy) this.cy.resize();

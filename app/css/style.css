@@ -25,6 +25,9 @@ body {
     background: #2c3e50;
     color: white;
     padding: 15px 20px;
+    max-height: min(58vh, 560px);
+    min-height: 0;
+    overflow-y: auto;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     z-index: 1000;
     position: relative;
@@ -51,19 +54,119 @@ body {
     margin: 0;
 }
 
+#main-controls {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px;
+}
+
+#main-controls > .control-group {
+    grid-column: span 4;
+    align-self: start;
+}
+
 .control-group {
+    min-width: 0;
+    position: relative;
+}
+
+.control-box {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+}
+
+.control-group-summary {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 7px 10px;
+    color: #fff;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.control-group-summary::-webkit-details-marker {
+    display: none;
+}
+
+.control-group-summary::before {
+    content: '\25B8';
+    width: 12px;
+    color: #aebdca;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.control-group[open] > .control-group-summary::before {
+    content: '\25BE';
+}
+
+.control-group-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.control-help {
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 19px;
+    text-align: center;
+    cursor: help;
+}
+
+.control-help:hover,
+.control-help[aria-expanded="true"] {
+    background: #3498db;
+    border-color: #8ed0f5;
+}
+
+.control-group-body {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
     min-width: 0;
+    padding: 0 10px 10px;
 }
 
-.control-box {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 6px;
+.control-group-body-column {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.control-help-popover {
+    position: absolute;
+    top: 34px;
+    right: 8px;
+    z-index: 20;
+    width: min(310px, calc(100vw - 32px));
+    padding: 9px 11px;
+    background: #f8fbfd;
+    color: #2c3e50;
+    border: 1px solid #8fa5b5;
+    border-radius: 5px;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.control-help-popover.hidden {
+    display: none;
 }
 
 .control-group label {
@@ -92,17 +195,14 @@ body {
     min-width: 200px;
 }
 
-.controls-section:nth-of-type(2) > .control-group:first-child {
-    flex: 1 1 520px;
+.control-group input[type="text"] {
+    width: min(100%, 360px);
+    max-width: 360px;
 }
 
-.controls-section:nth-of-type(2) > .control-group:first-child input[type="text"] {
+#search-controls .control-group-body input[type="text"] {
     flex: 1 1 220px;
-    min-width: 180px;
-}
-
-.controls-section:nth-of-type(2) > .control-group:last-child {
-    flex: 1 1 360px;
+    min-width: 0;
 }
 
 .control-group input[type="number"] {
@@ -129,6 +229,29 @@ body {
 .control-group button:hover,
 #panel-close-btn:hover {
     background: #2980b9;
+}
+
+.control-group button.control-help {
+    width: 21px;
+    min-width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 19px;
+    text-align: center;
+    cursor: help;
+}
+
+.control-group button.control-help:hover,
+.control-group button.control-help[aria-expanded="true"] {
+    background: #3498db;
+    border-color: #8ed0f5;
 }
 
 .control-group button.apply-btn {
@@ -206,7 +329,9 @@ body {
 }
 
 .advanced-search-panel textarea {
-    width: 100%;
+    width: min(100%, 520px);
+    max-width: 520px;
+    justify-self: start;
     min-height: 72px;
     padding: 7px 9px;
     border: 1px solid #ccc;
@@ -1281,7 +1406,20 @@ body {
 
     #controls {
         padding: 12px;
+        max-height: 48vh;
         gap: 8px;
+    }
+
+    #main-controls {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    #main-controls > .control-group,
+    #main-controls > #search-controls,
+    #main-controls > #dependency-controls,
+    #main-controls > #advanced-search-panel {
+        grid-column: 1;
     }
 
     #stats {
@@ -1289,15 +1427,10 @@ body {
         justify-content: flex-start;
     }
 
-    .control-box,
-    #dependency-controls,
-    .controls-section:nth-of-type(2) > .control-group:first-child,
-    .controls-section:nth-of-type(2) > .control-group:last-child {
-        flex-basis: 100%;
-    }
-
-    .control-group input[type="text"] {
-        min-width: 160px;
+    #search-controls .control-group-body input[type="text"] {
+        flex: 1 1 140px;
+        min-width: 0;
+        max-width: 360px;
     }
 
     .advanced-search-panel {
@@ -1541,12 +1674,21 @@ body {
 }
 
 #app.controls-collapsed #search-controls {
-    display: flex;
+    display: block;
     flex: 0 0 auto;
-    padding: 6px 10px;
+    padding: 0;
     background: rgba(44, 62, 80, 0.92);
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+#app.controls-collapsed #search-controls > .control-group-summary {
+    display: none;
+}
+
+#app.controls-collapsed #search-controls > .control-group-body {
+    display: flex;
+    padding: 6px 10px;
 }
 
 #app.controls-collapsed #search-controls input[type="text"] {

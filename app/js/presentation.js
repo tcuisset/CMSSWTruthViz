@@ -125,6 +125,8 @@
         const app = document.getElementById('app');
         const toggle = document.getElementById('controls-toggle');
         if (!app || !toggle) return;
+        const searchControls = document.getElementById('search-controls');
+        if (collapsed && searchControls) searchControls.open = true;
         app.classList.toggle('controls-collapsed', collapsed);
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.textContent = collapsed ? 'Show controls' : 'Hide controls';

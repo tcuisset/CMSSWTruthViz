@@ -17,16 +17,26 @@
             </div>
 
             <div class="controls-section" id="main-controls">
-                <div class="control-group" id="search-controls">
-                    <label for="search-input">Search:</label>
-                    <input type="text" id="search-input" placeholder="Search node labels..." />
-                    <button id="search-btn">Find</button>
-                    <button id="advanced-search-toggle-btn" type="button" title="Show advanced attribute search">Advanced</button>
-                    <button id="search-prev-btn" class="search-nav hidden" type="button" title="Previous search result">&lsaquo;</button>
-                    <span id="search-result-count" class="search-nav hidden">0 / 0</span>
-                    <button id="search-next-btn" class="search-nav hidden" type="button" title="Next search result">&rsaquo;</button>
-                    <button id="search-clear-btn">Clear</button>
-                </div>
+                <details class="control-group control-box" id="search-controls" open>
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Search</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="search-help" title="About search controls">?</button>
+                    </summary>
+                    <div class="control-group-body">
+                        <label for="search-input">Search:</label>
+                        <input type="text" id="search-input" placeholder="Search node labels..." />
+                        <button id="search-btn">Find</button>
+                        <button id="advanced-search-toggle-btn" type="button" title="Show advanced attribute search">Advanced</button>
+                        <button id="search-prev-btn" class="search-nav hidden" type="button" title="Previous search result">&lsaquo;</button>
+                        <span id="search-result-count" class="search-nav hidden">0 / 0</span>
+                        <button id="search-next-btn" class="search-nav hidden" type="button" title="Next search result">&rsaquo;</button>
+                        <button id="search-clear-btn">Clear</button>
+                    </div>
+                    <div id="search-help" class="control-help-popover hidden" role="note">
+                        Search visible node labels, or use Advanced for attribute expressions. When there are multiple matches, the arrow buttons move through them.
+                    </div>
+                </details>
 
                 <div id="advanced-search-panel" class="advanced-search-panel hidden">
                     <label for="advanced-search-input">Attributes</label>
@@ -35,102 +45,162 @@
                     <span id="advanced-search-status"></span>
                 </div>
 
-                <div class="control-group control-box">
-                    <label for="ego-radius">Focus Radius:</label>
-                    <input type="number" id="ego-radius" min="1" max="5" value="1" />
-                    <button id="ego-apply-btn" class="apply-btn" title="Apply focus radius to selected nodes">✓</button>
-                    <button id="ego-reset-btn">Reset View</button>
-                </div>
-
-                <div class="control-group control-box" id="dependency-controls">
-                    <label>Links:</label>
-                    <span id="selected-node-name" style="color: #ecf0f1; font-weight: 600;">None selected</span>
-                    <label for="dep-depth">Depth:</label>
-                    <input type="number" id="dep-depth" min="1" max="10" value="1" style="width: 60px;" />
-                    <button id="dep-none-btn" class="toggle-btn active" title="Do not apply a dependency filter">None</button>
-                    <button id="dep-upstream-btn" title="Show source-side links">Upstream</button>
-                    <button id="dep-downstream-btn" title="Show target-side links">Downstream</button>
-                    <button id="dep-show-btn" title="All edges between nodes in dependency tree (includes cross-connections)">Both</button>
-                    <button id="dep-apply-btn" class="apply-btn" title="Apply link filter to selected nodes">✓</button>
-                </div>
-
-                <div class="control-group control-box">
-                    <label for="layout-engine-select">Layout:</label>
-                    <select id="layout-engine-select">
-                        <option value="dagre" selected>Dagre</option>
-                        <option value="fcose">fCoSE</option>
-                        <option value="elk">ELK</option>
-                        <option value="forceatlas2">ForceAtlas2</option>
-                    </select>
-                    <button id="layout-apply-btn" class="apply-btn" type="button" title="Apply layout to currently visible nodes">✓</button>
-                </div>
-
-                <div class="control-group control-box">
-                    <label class="checkbox-label gensim-only" for="hide-gen-event-checkbox">
-                        <input type="checkbox" id="hide-gen-event-checkbox" />
-                        Hide GenEvent
-                    </label>
-                    <label class="checkbox-label gensim-only" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
-                        <input type="checkbox" id="hide-simvertex-key0-checkbox" />
-                        Hide SimVertex key=0
-                    </label>
-                    <label class="checkbox-label" for="hide-parton-shower-checkbox" title="Hide status=2 gluons and connect their parents directly to their children">
-                        <input type="checkbox" id="hide-parton-shower-checkbox" />
-                        Hide parton shower
-                    </label>
-                    <label class="checkbox-label" for="hide-small-subgraphs-checkbox" title="Hide disconnected graph components with fewer than 10 total nodes">
-                        <input type="checkbox" id="hide-small-subgraphs-checkbox" />
-                        Hide subgraphs &lt;10 nodes
-                    </label>
-                    <label class="checkbox-label truth-only" for="hide-pileup-checkbox" title="Hide everything that is not the signal interaction, that is bunch crossing 0 and event 0">
-                        <input type="checkbox" id="hide-pileup-checkbox" />
-                        Hide pile-up
-                    </label>
-                    <label class="checkbox-label truth-only" for="hide-underlying-event-checkbox" title="Hide particles carrying the underlyingEvent level and the artificial underlying-event vertex">
-                        <input type="checkbox" id="hide-underlying-event-checkbox" />
-                        Hide underlying event
-                    </label>
-                    <label class="checkbox-label truth-only" for="hide-zero-simhits-checkbox" title="Hide a particle whose whole subgraph leaves no sim hit in any channel">
-                        <input type="checkbox" id="hide-zero-simhits-checkbox" />
-                        Hide subgraphs with 0 sim hits
-                    </label>
-                    <label class="checkbox-label truth-only" for="energy-threshold-input" title="Hide particles whose energy is below this value">
-                        Hide E &lt;
-                        <input type="number" id="energy-threshold-input" min="0" step="0.1" value="0" />
-                        GeV
-                    </label>
-                </div>
-                <div class="control-group control-box">
-                    <div class="truth-only" id="level-filter">
-                        <div class="level-filter-title">
-                            Levels shown
-                            <button id="level-filter-all" type="button">all</button>
-                            <button id="level-filter-none" type="button">none</button>
-                        </div>
-                        <div id="level-filter-items"></div>
+                <details class="control-group control-box" id="focus-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Focus</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="focus-help" title="About focus controls">?</button>
+                    </summary>
+                    <div class="control-group-body">
+                        <label for="ego-radius">Focus Radius:</label>
+                        <input type="number" id="ego-radius" min="1" max="5" value="1" />
+                        <button id="ego-apply-btn" class="apply-btn" title="Apply focus radius to selected nodes">✓</button>
+                        <button id="ego-reset-btn">Reset View</button>
                     </div>
-                    <div class="filter-note truth-only" id="filter-status"></div>
-                </div>
-                <div class="control-group control-box">
-                    <div id="working-point-control" class="hidden">
-                        <label class="checkbox-label" for="show-reco-checkbox" title="Show or hide the reco objects and their match edges">
-                            <input type="checkbox" id="show-reco-checkbox" checked />
-                            Show reco objects
+                    <div id="focus-help" class="control-help-popover hidden" role="note">
+                        Select a node, choose how many graph steps to keep around it, then apply. Reset View restores the full graph.
+                    </div>
+                </details>
+
+                <details class="control-group control-box" id="dependency-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Links</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="dependency-help" title="About link controls">?</button>
+                    </summary>
+                    <div class="control-group-body">
+                        <label>Links:</label>
+                        <span id="selected-node-name" style="color: #ecf0f1; font-weight: 600;">None selected</span>
+                        <label for="dep-depth">Depth:</label>
+                        <input type="number" id="dep-depth" min="1" max="10" value="1" style="width: 60px;" />
+                        <button id="dep-none-btn" class="toggle-btn active" title="Do not apply a dependency filter">None</button>
+                        <button id="dep-upstream-btn" title="Show source-side links">Upstream</button>
+                        <button id="dep-downstream-btn" title="Show target-side links">Downstream</button>
+                        <button id="dep-show-btn" title="All edges between nodes in dependency tree (includes cross-connections)">Both</button>
+                        <button id="dep-apply-btn" class="apply-btn" title="Apply link filter to selected nodes">✓</button>
+                    </div>
+                    <div id="dependency-help" class="control-help-popover hidden" role="note">
+                        Select a node, choose a depth, and show upstream, downstream, or both kinds of lineage links. None clears the dependency filter.
+                    </div>
+                </details>
+
+                <details class="control-group control-box" id="layout-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Layout</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="layout-help" title="About layout controls">?</button>
+                    </summary>
+                    <div class="control-group-body">
+                        <label for="layout-engine-select">Layout:</label>
+                        <select id="layout-engine-select">
+                            <option value="dagre" selected>Dagre</option>
+                            <option value="fcose">fCoSE</option>
+                            <option value="elk">ELK</option>
+                            <option value="forceatlas2">ForceAtlas2</option>
+                        </select>
+                        <button id="layout-apply-btn" class="apply-btn" type="button" title="Apply layout to currently visible nodes">✓</button>
+                    </div>
+                    <div id="layout-help" class="control-help-popover hidden" role="note">
+                        Choose the graph layout engine and apply it to the nodes currently visible after filtering.
+                    </div>
+                </details>
+
+                <details class="control-group control-box" id="visibility-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Visibility</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="visibility-help" title="About visibility controls">?</button>
+                    </summary>
+                    <div class="control-group-body control-group-body-column">
+                        <label class="checkbox-label gensim-only" for="hide-gen-event-checkbox">
+                            <input type="checkbox" id="hide-gen-event-checkbox" />
+                            Hide GenEvent
                         </label>
-                        <div class="level-filter-title">Association working point</div>
-                        <div id="working-point-items"></div>
-                        <div class="filter-note" id="working-point-status"></div>
-                        <div class="filter-note">
-                            Fixed is the plain per-root match. The adaptive points let the
-                            match climb to a broader branch, bounded by how much of that
-                            branch the reco object leaves unexplained.
+                        <label class="checkbox-label gensim-only" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
+                            <input type="checkbox" id="hide-simvertex-key0-checkbox" />
+                            Hide SimVertex key=0
+                        </label>
+                        <label class="checkbox-label" for="hide-parton-shower-checkbox" title="Hide status=2 gluons and connect their parents directly to their children">
+                            <input type="checkbox" id="hide-parton-shower-checkbox" />
+                            Hide parton shower
+                        </label>
+                        <label class="checkbox-label" for="hide-small-subgraphs-checkbox" title="Hide disconnected graph components with fewer than 10 total nodes">
+                            <input type="checkbox" id="hide-small-subgraphs-checkbox" />
+                            Hide subgraphs &lt;10 nodes
+                        </label>
+                        <label class="checkbox-label truth-only" for="hide-pileup-checkbox" title="Hide everything that is not the signal interaction, that is bunch crossing 0 and event 0">
+                            <input type="checkbox" id="hide-pileup-checkbox" />
+                            Hide pile-up
+                        </label>
+                        <label class="checkbox-label truth-only" for="hide-underlying-event-checkbox" title="Hide particles carrying the underlyingEvent level and the artificial underlying-event vertex">
+                            <input type="checkbox" id="hide-underlying-event-checkbox" />
+                            Hide underlying event
+                        </label>
+                        <label class="checkbox-label truth-only" for="hide-zero-simhits-checkbox" title="Hide a particle whose whole subgraph leaves no sim hit in any channel">
+                            <input type="checkbox" id="hide-zero-simhits-checkbox" />
+                            Hide subgraphs with 0 sim hits
+                        </label>
+                        <label class="checkbox-label truth-only" for="energy-threshold-input" title="Hide particles whose energy is below this value">
+                            Hide E &lt;
+                            <input type="number" id="energy-threshold-input" min="0" step="0.1" value="0" />
+                            GeV
+                        </label>
+                    </div>
+                    <div id="visibility-help" class="control-help-popover hidden" role="note">
+                        These filters hide parts of the graph while preserving connections between the remaining visible nodes. The available options depend on the loaded graph type.
+                    </div>
+                </details>
+                <details class="control-group control-box" id="level-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Truth levels</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="level-help" title="About truth level controls">?</button>
+                    </summary>
+                    <div class="control-group-body control-group-body-column">
+                        <div class="truth-only" id="level-filter">
+                            <div class="level-filter-title">
+                                Levels shown
+                                <button id="level-filter-all" type="button">all</button>
+                                <button id="level-filter-none" type="button">none</button>
+                            </div>
+                            <div id="level-filter-items"></div>
+                        </div>
+                        <div class="filter-note truth-only" id="filter-status"></div>
+                    </div>
+                    <div id="level-help" class="control-help-popover hidden" role="note">
+                        Toggle the dominant truth levels shown in the graph. Use all or none to change every listed level at once.
+                    </div>
+                </details>
+                <details class="control-group control-box" id="association-controls">
+                    <summary class="control-group-summary">
+                        <span class="control-group-title">Reco association</span>
+                        <button class="control-help" type="button" aria-expanded="false"
+                                aria-controls="association-help" title="About association controls">?</button>
+                    </summary>
+                    <div class="control-group-body control-group-body-column">
+                        <div id="working-point-control" class="hidden">
+                            <label class="checkbox-label" for="show-reco-checkbox" title="Show or hide the reco objects and their match edges">
+                                <input type="checkbox" id="show-reco-checkbox" checked />
+                                Show reco objects
+                            </label>
+                            <div class="level-filter-title">Association working point</div>
+                            <div id="working-point-items"></div>
+                            <div class="filter-note" id="working-point-status"></div>
+                            <div class="filter-note">
+                                Fixed is the plain per-root match. The adaptive points let the
+                                match climb to a broader branch, bounded by how much of that
+                                branch the reco object leaves unexplained.
+                            </div>
+                        </div>
+                        <div class="filter-note truth-only">
+                            Hiding always collapses: the visible parents of a hidden node
+                            are joined to its visible children, so nothing is orphaned.
                         </div>
                     </div>
-                    <div class="filter-note truth-only">
-                        Hiding always collapses: the visible parents of a hidden node
-                        are joined to its visible children, so nothing is orphaned.
+                    <div id="association-help" class="control-help-popover hidden" role="note">
+                        When association data are available, show reconstructed objects and choose the working point used for their truth matches.
                     </div>
-                </div>
+                </details>
             </div>
 
             <div class="controls-section" id="stats">
@@ -474,6 +544,7 @@
     <script defer src="js/utils.js"></script>
     <script defer src="js/forceatlas2.js"></script>
     <script defer src="js/graph.js"></script>
+    <script defer src="js/control-groups.js"></script>
     <script defer src="js/panel.js"></script>
     <script defer src="js/plot3d.js"></script>
     <script defer src="js/search.js"></script>
