@@ -4,6 +4,22 @@ set -euo pipefail
 service="truthviz"
 container_port=3000
 
+usage() {
+    cat <<'EOF'
+Usage: ./dev COMMAND
+
+Commands:
+  full-setup  Build, start, and wait for the application to become healthy
+  build       Build the development image
+  test        Run the unit-test suite in a temporary development container
+  start       Build and start the application in the background
+  shell       Open a shell in the running application container
+  logs        Show recent application logs
+  url         Print the current browser URL
+  stop        Stop and remove the development containers
+EOF
+}
+
 get_port() {
     docker compose port "$service" "$container_port" |
         head -n1 |
@@ -26,7 +42,13 @@ case "${1:-}" in
     docker compose build
     ;;
   test)
-    docker compose run --rm $service pytest
+    docker compose run --rm "$service" bash -lc '
+      if [ ! -x venv/bin/python ]; then
+        echo "Run ./dev full-setup once to create the development environment." >&2
+        exit 1
+      fi
+      venv/bin/python -m unittest discover -s tests -v
+    '
     ;;
   start)
     docker compose up -d --build
@@ -35,16 +57,20 @@ case "${1:-}" in
         docker compose exec "$service" bash
         ;;
   logs)
-    docker compose logs --tail=200 $service
+    docker compose logs --tail=200 "$service"
     ;;
-    port)
-        get_port
-        ;;
-
-    url)
-        get_url
-        ;;
+  url)
+    get_url
+    ;;
   stop)
     docker compose down
+    ;;
+  -h|--help|help|'')
+    usage
+    ;;
+  *)
+    echo "Unknown command: $1" >&2
+    usage >&2
+    exit 1
     ;;
 esac

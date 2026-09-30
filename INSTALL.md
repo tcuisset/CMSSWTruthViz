@@ -48,7 +48,26 @@ the CMSSW area side by side to use an existing project:
 └── CMSSWTruthViz/
 ```
 
-## Quick Local Run
+## Docker Development Environment
+
+The supported full-functionality environment is the Docker Compose service. It
+uses the CMSSW EL9 image, bind-mounts the checkout, and publishes container port
+3000 on a dynamically allocated host port:
+
+```bash
+./dev full-setup
+./dev url
+```
+
+Always use the URL returned by `./dev url`; do not assume a fixed host port.
+Other commands are `./dev build`, `./dev start`, `./dev logs`, `./dev shell`,
+`./dev test`, and `./dev stop`.
+
+The host must provide `/cvmfs/cms.cern.ch`. If the selected architecture tree
+is not visible through that mount, also enable the explicit architecture bind
+documented in `compose.yaml`.
+
+## Host Run
 
 ```bash
 cd CMSSWGraphViz
@@ -64,15 +83,13 @@ http://localhost:8009/app/
 
 If port `8009` is in use, the server tries following ports and prints the one it selected.
 
-Use a specific DOT file:
-
 ## What run.sh Does
 
 `run.sh` performs the local setup and launch:
 
 1. Runs `npm ci` and generates `app/vendor/` if the browser dependencies are absent.
 2. Creates `venv/` if it does not exist.
-3. Installs Python dependencies from `preprocess/requirements.txt` if needed.
+3. Installs Python dependencies from `requirements.txt` if needed.
 4. Reuses or creates the configured CMSSW release under `data/cmssw` when no
    `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
 5. Starts `server.py` with one isolated-job worker.
@@ -132,55 +149,13 @@ prebuilt catalogue sample, process CMSSW ROOT upload/EOS input, or process DOT
 plus optional rechits. Processed JSON is saved and verified in the browser
 before its random server job directory is deleted.
 
-## OpenShift
+## Production Image and OpenShift
 
-The recommended OpenShift deployment uses `Dockerfile`, based on
-`cmssw/el9:x86_64`, so the app and CMSSW jobs run in an EL9-compatible
-container without nested Singularity/Apptainer. `Containerfile` is kept with the
-same contents for local Podman/Docker workflows.
-
-Build from the `CMSSWGraphViz` repository root:
-
-```bash
-oc new-build --strategy=docker --binary --name=cmsswgraphviz
-oc start-build cmsswgraphviz --from-dir=. --follow
-oc new-app cmsswgraphviz
-```
-
-Use Docker strategy for deployments with the CERN EOS pod annotation. That
-annotation mounts an `emptyDir` over `/tmp`; classic S2I startup commands that
-execute `/tmp/scripts/run` will then fail because the script is hidden by the
-mount. The included `Dockerfile` starts
-`/opt/app-root/src/.s2i/bin/run` directly.
-
-At runtime `.s2i/bin/run` executes:
-
-```bash
-python server.py --host 0.0.0.0 --start-port ${PORT:-8080} --no-auto-find-port
-```
-
-For CMSSW ROOT processing, mount `/cvmfs/cms.cern.ch` and a writable persistent
-volume. The entrypoint sources:
-
-```bash
-export VO_CMS_SW_DIR=/cvmfs/cms.cern.ch
-source /cvmfs/cms.cern.ch/cmsset_default.sh
-```
-
-then creates a regular `CMSSW_20_1_0_pre3` project with SCRAM in
-`TRUTHVIZ_CMSSW_INSTALL_ROOT` when that release is not installed. In the
-recommended `cmssw/el9:x86_64` image, `cmsRun` runs directly through
-`scram runtime -sh`. Set `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` to override runtime
-install.
-
-Expose the service if needed:
-
-```bash
-oc expose service/cmsswgraphviz
-```
-
-On startup, the server displays the launcher and does not select or publish a
-shared event.
+`Dockerfile` is the single production image definition. It builds the pinned
+browser dependencies in a Node.js stage, installs the Python environment in the
+CMSSW EL9 image, and starts `run.sh` on port 8080. OpenShift must use Docker
+strategy. See [OPENSHIFT.md](OPENSHIFT.md) for the deployment commands, mounts,
+and runtime variables.
 
 ## Troubleshooting
 

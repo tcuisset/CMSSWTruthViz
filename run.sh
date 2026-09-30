@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Quick start script for CMSSW Graph Visualization
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -108,7 +108,7 @@ fi
 echo "Checking dependencies..."
 if ! "$VENV_PYTHON" -c "import networkx" 2>/dev/null; then
     echo "Installing Python dependencies..."
-    "$VENV_PYTHON" -m pip install -q -r preprocess/requirements.txt
+    "$VENV_PYTHON" -m pip install -q -r requirements.txt
     echo "✓ Dependencies installed"
 else
     echo "✓ Dependencies already installed"
@@ -117,13 +117,28 @@ echo ""
 
 CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
 
+source_cms_environment() {
+    # The CMS bootstrap currently reads a few optional unset variables. Keep
+    # nounset enabled for this script, but do not impose it on external setup.
+    set +u
+    # shellcheck disable=SC1090
+    source "$CMSSET_DEFAULT"
+    set -u
+}
+
 # Uploaded ROOT and EOS processing needs a regular CMSSW project containing the TruthInfo
 # dumper. Keep the local launcher consistent with the container entrypoint:
 # use an explicitly configured runtime first, then reuse or create a managed
 # pre3 project under data/cmssw.
 CMSSW_RELEASE="${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
 CMSSW_SCRAM_ARCH="${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
-CMSSW_INSTALL_ROOT="${TRUTHVIZ_CMSSW_INSTALL_ROOT:-$SCRIPT_DIR/data/cmssw}"
+if [ -n "${TRUTHVIZ_CMSSW_INSTALL_ROOT:-}" ]; then
+    CMSSW_INSTALL_ROOT="$TRUTHVIZ_CMSSW_INSTALL_ROOT"
+elif [ -n "${TRUTHVIZ_JOB_ROOT:-}" ]; then
+    CMSSW_INSTALL_ROOT="$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw"
+else
+    CMSSW_INSTALL_ROOT="$SCRIPT_DIR/data/cmssw"
+fi
 
 find_cmssw_src() {
     local root="$1"
@@ -152,7 +167,9 @@ install_cmssw_release() {
 
     (
         cd "$project_dir/src"
+        set +u
         eval "$(scram runtime -sh)"
+        set -u
         release_truth_info="$CMSSW_RELEASE_BASE/src/PhysicsTools/TruthInfo"
         if [ ! -f "$release_truth_info/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
             echo "Error: PhysicsTools/TruthInfo is missing from $CMSSW_RELEASE_BASE" >&2
@@ -193,8 +210,7 @@ if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
         if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
             trap 'rmdir "$install_lock" 2>/dev/null || true' EXIT
             export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
-            # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
-            source "$CMSSET_DEFAULT"
+            source_cms_environment
             if ! command -v scram >/dev/null 2>&1; then
                 echo "Error: scram was not found after sourcing $CMSSET_DEFAULT" >&2
                 exit 1
@@ -220,8 +236,7 @@ fi
 if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
     if [ -r "$CMSSET_DEFAULT" ]; then
         export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
-        # shellcheck source=/cvmfs/cms.cern.ch/cmsset_default.sh
-        source "$CMSSET_DEFAULT"
+        source_cms_environment
     fi
 
     scram_arch=""

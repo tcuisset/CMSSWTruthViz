@@ -7,10 +7,11 @@ small enough to read on a page, the graph rendered to PDF. The three viewer inpu
 from one `cmsRun` job, so the particle indices in the JSON refer to the nodes of the DOT
 next to it.
 
-```bash
-./load_event.sh              # list them
-./load_event.sh demo/z_ee    # load one and start the server
-```
+Start the server with `./dev full-setup` (full CMSSW environment) or `./run.sh`
+(host environment). In the launcher, choose **Prepared input** and select a
+folder's `truthlogicalgraph_*.dot.gz`; optionally add its `rechits_nano.root`
+and use the event index recorded in `event.json`. The permanent samples under
+`samples/artifacts/` are available directly through the **Catalogue** choice.
 
 | folder | sample | event | nodes | reco objects |
 |---|---|---|---|---|

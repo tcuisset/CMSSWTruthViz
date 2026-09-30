@@ -21,35 +21,33 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 
 ## Documentation Map
 
-- [INSTALL.md](INSTALL.md): local setup, Python and npm dependencies, static mode, server mode, and OpenShift deployment.
+- [INSTALL.md](INSTALL.md): Docker development, local setup, static mode, and production images.
 - [FRONTEND.md](FRONTEND.md): web app structure, Cytoscape managers, UI controls, layouts, Plotly rechits panel, exports, and keyboard behavior.
 - [DATA_FORMAT.md](DATA_FORMAT.md): `bundle.json`, `bundle.js`, `rechits.json`, node and edge fields, and how DOT attributes are mapped.
 - [SERVER.md](SERVER.md): Python preprocessing scripts, local HTTP server, upload endpoints, background build status, ROOT rechits extraction, and startup behavior.
-- [FEATURES.md](FEATURES.md): current user-facing feature reference.
-- [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md): common truth-graph investigation workflows.
+- [FEATURES.md](FEATURES.md): user-facing features and common investigation workflows.
 - [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md): short implementation notes and maintenance guidance.
 - [OPENSHIFT.md](OPENSHIFT.md): concise OpenShift deployment notes using the CMSSW EL9 container image.
 
 ## Quick Start
 
+For the complete CMSSW-capable environment, use Docker Compose:
+
 ```bash
 cd CMSSWGraphViz
-chmod +x run.sh
-./run.sh
+./dev full-setup
+./dev url
 ```
 
-`run.sh` generates `app/vendor/` from the pinned npm dependencies when needed,
-creates `venv/`, installs Python dependencies, prepares or
-reuses a managed `CMSSW_20_1_0_pre3` project under `data/cmssw` when needed,
-and starts the isolated-job server. Select input from the browser launcher.
+The host port is assigned dynamically; open the URL printed by `./dev url`.
+Source files are bind-mounted, so edits are visible without rebuilding the
+image. Use `./dev logs`, `./dev shell`, and `./dev stop` to manage the service.
 
-The server prints the selected application URL. By default it starts at:
-
-```text
-http://localhost:8009/app/
-```
-
-If that port is busy, `server.py` tries subsequent ports.
+For prepared/catalogue inputs on a host that already has Python 3.9+ and Node.js
+20+, `./run.sh` remains available. It generates the pinned browser libraries,
+creates `venv/`, installs Python dependencies, and starts the server, normally
+at `http://localhost:8009/app/`. ROOT processing additionally requires a valid
+CMSSW runtime.
 
 To generate viewer inputs directly from a CMSSW EDM ROOT file:
 
@@ -113,9 +111,13 @@ CMSSWGraphViz/
 ├── server.py
 ├── truth_pipeline.py
 ├── visualizeTruthGraph
+├── dev
 ├── run.sh
+├── Dockerfile
+├── Dockerfile.dev
+├── compose.yaml
 ├── requirements.txt
-└── .s2i/bin/run
+└── package.json
 ```
 
 The workspace parent may contain example DOT files, but the application repository is this `CMSSWGraphViz/` directory.

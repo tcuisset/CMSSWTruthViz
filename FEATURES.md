@@ -1,6 +1,6 @@
-# Features Reference
+# Features and Workflows
 
-This is the user-facing feature reference for the Truth Graph Viewer.
+This is the user-facing feature and workflow guide for the Truth Graph Viewer.
 
 ## Graph Display
 
@@ -121,6 +121,71 @@ directories and one FIFO worker. A processed graph and its rechits are saved
 atomically in the browser before the server copy is deleted.
 
 The launcher is hidden in static `file://` mode.
+
+## Common Workflows
+
+### Find and inspect a node
+
+Use basic search for a visible label, node ID, PDG ID, or text from the DOT
+label. Queries such as `mu`, `pi+`, `n123`, and `SimVertex` are useful starting
+points. Use the previous/next controls when several nodes match, then open a
+result to inspect its summary, truth ancestors and descendants, rendered DOT
+label, raw attributes, and associations.
+
+For attribute-level questions, use advanced search. Criteria can be separated
+with new lines, semicolons, `AND`, or `&&`:
+
+```text
+pid==211
+status==1 AND energy>10
+hasGen AND hasSim
+crossedBoundary
+particleName contains mu
+```
+
+### Reduce a dense graph
+
+Start with the visibility filters, then select a node and use either focus
+radius for an undirected local neighborhood or link filtering for directed
+upstream/downstream context. Increase radius or depth gradually, and use
+**Reset View** to restore the full graph.
+
+### Inspect rechits
+
+With rechit data loaded, choose **Direct hits** and select a node containing
+`directHitsDetIds`. Choose **Subgraph hits** to aggregate the selected node and
+its descendants. Plotly controls rotate, zoom, and pan the 3D view.
+
+### Load new input
+
+The server launcher offers two processing paths:
+
+- **CMSSW ROOT** accepts an uploaded EDM ROOT file or CERN EOS path, event
+  index, and optional dumper arguments. This path requires a CMSSW runtime.
+- **Prepared input** accepts a DOT or gzipped DOT graph plus an optional
+  rechits ROOT file and its table event index.
+
+Processed results are saved as a named browser session. The catalogue provides
+ready-to-open samples without rerunning `cmsRun`.
+
+### Export a view
+
+After filtering, fitting, or zooming the graph, use **Save PNG** or **Save PDF**.
+Exports capture the current Cytoscape viewport.
+
+### Inspect from the browser console
+
+```javascript
+GraphManager.cy.nodes().filter(node => node.visible()).map(node => node.data())
+```
+
+To list labels that are not hidden:
+
+```javascript
+GraphManager.cy.nodes()
+  .filter(node => !node.hasClass('hidden'))
+  .map(node => node.data('label'))
+```
 
 ## Keyboard Shortcuts
 

@@ -14,7 +14,7 @@ deploy_dev:
     - oc login --token="${DEPLOY_TOKEN}" "${SERVER}"
     - oc project "${PROJECT}"
 
-    # Start a new build of the existing BuildConfig.
+    # Start a new build of the existing Docker-strategy BuildConfig.
     - oc start-build cmssw-truth-viz --follow --wait
 
     # If your dev Deployment watches the :dev ImageStreamTag,

@@ -55,7 +55,7 @@ The development
 image is based on `cmssw/el9:x86_64` but deliberately does not copy the
 repository; Compose bind-mounts the working tree into `/workspace`, so source
 edits are immediately visible to the running server. The checked-in
-`Dockerfile`/`Containerfile` remain the copy-into-image deployment path.
+`Dockerfile` is the copy-into-image deployment path.
 
 The tested CMSSW defaults are:
 
@@ -79,8 +79,8 @@ reuses the ignored `venv/` and the server's ignored runtime data under `data/`.
 Run as the host UID when possible so these files do not become root-owned.
 Validate the rendered page from the host as well as with the container health
 check; a successful API response alone does not prove that the browser UI
-loaded. For a deployment-style test of the copy-into-image path, use the
-image entrypoint (`.s2i/bin/run`) separately.
+loaded. For a deployment-style test, build `Dockerfile` and exercise its
+`run.sh` image entrypoint separately.
 
 
 
@@ -90,7 +90,7 @@ Run the cheap checks first, then the container/API checks when the change
 affects runtime behavior:
 
 ```bash
-bash -n run.sh load_event.sh visualizeTruthGraph
+bash -n run.sh dev visualizeTruthGraph
 venv/bin/python -m unittest discover -s tests -v
 venv/bin/python -m py_compile server.py truth_pipeline.py visualizeTruthGraph preprocess/*.py tests/*.py
 docker compose config
@@ -132,14 +132,6 @@ errors. API success alone does not prove that the Cytoscape/Plotly UI loaded.
 - Do not assume every workflow is registered in stock pre3. In particular,
   custom workflow `34998.88` requires separate handling rather than a direct
   `runTheMatrix.py` invocation.
-
-## Known launcher mismatch
-
-`load_event.sh` currently ends by invoking `./run.sh --dot ...`, but the
-current `run.sh` accepts only `-h/--help`. Therefore `./load_event.sh
-demo/z_ee` is not a valid passing test at present. Treat this as a known issue;
-if a task touches event loading, repair the interface and add a regression test
-instead of weakening the option parser or reporting this path as validated.
 
 ## Reporting expectations
 
