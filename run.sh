@@ -12,6 +12,11 @@ Usage: ./run.sh [options]
 
 Options:
   -h, --help         Show this help message
+
+Environment:
+  TRUTHVIZ_SERVER_HOST            Server bind host (default: localhost)
+  TRUTHVIZ_SERVER_PORT            Server port (default: 8009)
+  TRUTHVIZ_SERVER_AUTO_FIND_PORT  Set to 0 to require the selected port
 EOF
 }
 
@@ -232,4 +237,20 @@ echo ""
 echo "Starting web server..."
 echo "============================================================"
 echo ""
-"$VENV_PYTHON" server.py
+SERVER_HOST="${TRUTHVIZ_SERVER_HOST:-localhost}"
+SERVER_PORT="${TRUTHVIZ_SERVER_PORT:-8009}"
+SERVER_ARGS=(--host "$SERVER_HOST" --start-port "$SERVER_PORT")
+
+case "${TRUTHVIZ_SERVER_AUTO_FIND_PORT:-1}" in
+    0|false|no)
+        SERVER_ARGS+=(--no-auto-find-port)
+        ;;
+    1|true|yes|'')
+        ;;
+    *)
+        echo "Error: TRUTHVIZ_SERVER_AUTO_FIND_PORT must be 0/1, true/false, or yes/no" >&2
+        exit 1
+        ;;
+esac
+
+"$VENV_PYTHON" server.py "${SERVER_ARGS[@]}"
