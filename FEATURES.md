@@ -112,17 +112,15 @@ The header provides:
 
 Both export the current Cytoscape viewport, not the entire unbounded graph.
 
-## Upload
+## Event launcher and browser sessions
 
-In server mode, **Upload Files** accepts:
+Server mode opens with four choices: resume/delete an IndexedDB session, open a
+permanent prebuilt catalogue sample, process an uploaded ROOT file or EOS path,
+or process prepared DOT plus optional rechits. Jobs use isolated temporary
+directories and one FIFO worker. A processed graph and its rechits are saved
+atomically in the browser before the server copy is deleted.
 
-- a required DOT file
-- an optional ROOT rechits file
-- a rechits event index
-
-The server rebuilds the JSON bundle in the background and the page reloads when processing finishes.
-
-Upload is hidden in static `file://` mode.
+The launcher is hidden in static `file://` mode.
 
 ## Keyboard Shortcuts
 

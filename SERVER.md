@@ -1,264 +1,69 @@
-# Server And Preprocessing
+# Server And Session Processing
 
-The Python side has three jobs:
+The HTTP deployment has no pod-wide current event. Every uploaded CMSSW ROOT or
+prepared DOT/rechit input is processed in a random directory below
+`TRUTHVIZ_JOB_ROOT`. A single FIFO worker executes jobs so several users can
+submit work without running several `cmsRun` processes in one pod.
 
-1. Convert DOT and optional ROOT input files into JSON consumed by the browser.
-2. Serve the app locally and support browser uploads in server mode.
-3. Run the CMSSW dumper on a CMSSW EDM ROOT input and publish the generated viewer files.
+## Browser handoff
 
-## Python Dependencies
+The result is a versioned JSON envelope containing session metadata, the graph
+bundle, optional rechits, and optional associations. The browser downloads the
+envelope, commits and verifies it in IndexedDB, and then acknowledges the job.
+Only that acknowledgement deletes the temporary directory. Finished jobs that
+are never acknowledged are removed after `TRUTHVIZ_JOB_TTL_SEC` (24 hours by
+default), including after a pod restart.
 
-Dependencies are listed in both `requirements.txt` and `preprocess/requirements.txt`:
+The random job ID is a bearer capability: anyone who knows it can read that
+job's status and result. It provides isolation between browser clients, not user
+authentication.
 
-```text
-networkx
-particle
-uproot
-```
+## API
 
-`run.sh` installs from `preprocess/requirements.txt` into `venv/`.
+- `POST /api/jobs/root`: multipart CMSSW ROOT upload or `source=path` EOS input.
+  Fields are `rootFile` or `rootPath`, `eventIndex`, optional `dumperArgs`, and
+  optional `sessionName`.
+- `POST /api/jobs/prepared`: multipart `dotFile`, optional rechit `rootFile`,
+  `rechitsEventIndex`, and optional `sessionName`.
+- `GET /api/jobs/<id>/status`: job state, processing phase, and FIFO queue
+  position. States are `queued`, `running`, `success`, and `error`.
+- `GET /api/jobs/<id>/result`: complete JSON result after success. Reading this
+  endpoint does not delete anything and may safely be retried.
+- `DELETE /api/jobs/<id>`: acknowledge a terminal job and delete all of its
+  server-side files.
+- `GET /api/catalog`: public metadata for persistent prebuilt samples.
+- `GET /api/catalog/<id>/result`: persistent graph and rechit JSON for one
+  catalogue sample. This endpoint never runs `cmsRun`.
 
-## DOT To Bundle
+The older global `/upload`, `/process-root`, `/upload-status`, and runtime sample
+processing endpoints are intentionally removed.
 
-Primary command:
+## Catalogue artifacts
 
-```bash
-python preprocess/build_bundle.py truthgraph.dot data/bundle.json
-```
+`samples/catalog.json` retains each ROOT input and its dumper settings for
+provenance, and adds `artifacts.bundle`, `artifacts.rechits`, and optionally
+`artifacts.associations`. These JSON files are deployed with the app and are
+never deleted by job cleanup.
 
-`build_bundle.py` calls `parse_graph.parse_dot_file()` and writes:
-
-- `data/bundle.json`
-- `app/js/bundle.js`, through `preprocess/generate_bundle_js.py`
-
-Default DOT lookup when no argument is provided:
-
-1. `./truthgraph.dot`
-2. `../truthgraph.dot`
-3. `./dependency.gv`
-
-`parse_graph.py` uses:
-
-- `networkx` for an internal graph object during parsing.
-- `particle` for PDG ID to particle-name conversion.
-
-The parser keeps most DOT node and edge attributes as JSON fields. It separates display labels from raw DOT labels so the browser can show compact canvas labels and full detail-panel metadata.
-
-## ROOT Rechits To JSON
-
-Primary command:
-
-```bash
-python preprocess/build_rechits_json.py rechits.root data/rechits.json --event-index 0
-```
-
-By default the script also writes:
-
-```text
-app/js/rechits.js
-```
-
-Use `--no-js-output` to write only JSON.
-
-The script reads one event from a ROOT tree with `uproot`. Defaults:
-
-- Tree: `Events`
-- Event index: `0`
-- Static JS output: `app/js/rechits.js`
-
-Required branches:
-
-- `rechits_rechit_ID`
-- `rechits_rechit_x`
-- `rechits_rechit_y`
-- `rechits_rechit_z`
-
-## Local Server
-
-Start manually with:
+Rebuild one or all samples in a configured CMSSW environment with:
 
 ```bash
-python server.py
+venv/bin/python preprocess/build_catalog_artifacts.py
+venv/bin/python preprocess/build_catalog_artifacts.py --sample dy-to-tautau
 ```
 
-Useful options:
+## Runtime configuration
 
-```bash
-python server.py --host localhost --start-port 8009
-python server.py --host 0.0.0.0 --start-port 8080 --no-auto-find-port
-```
+- `TRUTHVIZ_JOB_ROOT`: temporary job parent, default `data/jobs`.
+- `TRUTHVIZ_JOB_TTL_SEC`: terminal-job retention, default `86400`.
+- `TRUTHVIZ_CATALOG`: catalogue manifest, default `samples/catalog.json`.
+- `TRUTHVIZ_MAX_UPLOAD_MB`: maximum request size, default `2048`.
+- `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: CMSSW timeout, default `3600`.
+- `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE`, and `TRUTHVIZ_CMSRUN_WRAPPER`: CMSSW
+  runtime selection.
+- `TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1`: permit non-EOS server paths for local
+  development only.
 
-Defaults:
-
-- Host: `localhost`
-- First port: `8009`
-- Auto-find next free port: enabled
-- Max port attempts: `100`
-
-The server serves the repository root, so the app URL is:
-
-```text
-http://localhost:8009/app/
-```
-
-or the port printed at startup.
-
-## Startup Bundle Handling
-
-On startup, `server.py` calls `ensure_initial_bundle()`:
-
-- If `data/bundle.json` exists, it is used.
-- Otherwise it tries to generate a bundle from `truthgraph.dot` or `dependency.gv`.
-- If no DOT file exists, it creates an empty bundle so the app can still start and accept uploads.
-
-## Upload Endpoints
-
-Server mode enables the upload modal in the browser.
-
-### `POST /upload`
-
-Prepared input mode. This keeps the original upload behavior.
-
-Accepts multipart form fields:
-
-- `mode`: optional, must be `prepared` when provided.
-- `dotFile`: required DOT graph file.
-- `rootFile`: optional ROOT file containing rechits.
-- `rechitsEventIndex`: optional non-negative integer, default `0`.
-
-The server saves uploads to:
-
-- `truthgraph.dot`
-- `rechits.root`, when a ROOT file is provided.
-
-It then starts a background thread that regenerates:
-
-- `data/bundle.json`
-- `app/js/bundle.js`
-- `data/rechits.json`, when a ROOT file is provided.
-
-### `GET /upload-status`
-
-Returns current background build state:
-
-```json
-{
-  "success": true,
-  "build": {
-    "state": "idle",
-    "message": "No bundle build is running.",
-    "startedAt": null,
-    "finishedAt": null
-  }
-}
-```
-
-Build states are `idle`, `queued`, `running`, `success`, and `error`.
-The status object also includes `phase`, `jobId`, and `outputs` when available.
-
-`app/js/upload.js` polls this endpoint until upload processing finishes, then reloads the page.
-
-### `POST /process-root`
-
-CMSSW input mode. Accepts multipart form fields:
-
-- `source`: optional input source, either `upload` or `path`, default `upload`.
-- `rootFile`: required CMSSW EDM ROOT file when `source=upload`.
-- `rootPath`: required server-side CMSSW EDM ROOT file path when `source=path`.
-- `eventIndex`: optional non-negative integer, default `0`.
-- `dumperArgs`: optional extra arguments passed to `dumpTruthGraphsFromGENSIMRECO_cfg.py`.
-
-For `source=path`, the path must be under `/eos/` by default. The UI describes
-the intended OpenShift usage: CERN EOS files in `/eos/user` or `/eos/cms` shared
-with the `tb18clue3d` user. For local development tests without `/eos` mounted,
-set `TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1` to allow absolute local paths.
-
-The server stores browser uploads under `TRUTHVIZ_JOB_ROOT`, then runs:
-
-```bash
-cmsRun PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py <input.root> -n 1 --skipEvents <eventIndex> -o <job>/cmssw
-```
-
-Then it converts the event-suffixed logical DOT and generated `rechits_nano*.root`
-into the current viewer files.
-
-### `GET /samples`
-
-Returns the configured sample catalogue from `TRUTHVIZ_CATALOG`, defaulting to
-`samples/catalog.json`.
-
-### `POST /samples/<id>/process`
-
-Starts a CMSSW processing job for one manifest-declared sample. The browser never
-sends arbitrary server paths; it can only request sample ids listed in the manifest.
-
-Manifest shape:
-
-```json
-{
-  "samples": [
-    {
-      "id": "zmm",
-      "label": "Z to muons",
-      "description": "Small GEN-SIM-RECO sample",
-      "path": "/data/samples/zmm.root",
-      "eventIndex": 0,
-      "dumperArgs": "--no-keepSpectators -s 23"
-    }
-  ]
-}
-```
-
-## CMSSW Pipeline
-
-The reusable pipeline lives in `truth_pipeline.py`. Runtime configuration:
-
-- `TRUTHVIZ_CMSSW_SRC`: CMSSW `src` directory.
-- `TRUTHVIZ_JOB_ROOT`: writable job directory, default `data/jobs`.
-- `TRUTHVIZ_CMSSW_INSTALL_ROOT`: writable runtime CMSSW install directory,
-  default `$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw` when `TRUTHVIZ_JOB_ROOT` is set,
-  otherwise `data/cmssw`.
-- `TRUTHVIZ_CATALOG`: sample manifest path, default `samples/catalog.json`.
-- `TRUTHVIZ_MAX_UPLOAD_MB`: upload size limit in MiB, default `2048`.
-- `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: cmsRun timeout, default `3600`.
-- `TRUTHVIZ_CMSRUN_WRAPPER`: optional wrapper for only the `cmsRun` step. Leave
-  unset in the recommended `cmssw/el9:x86_64` container; set to `cmssw-el9` only
-  in environments where nested Singularity/Apptainer is available and needed.
-- `CMSSET_DEFAULT`: CMS bootstrap script used by S2I when direct `cmsRun` is not
-  available, default `/cvmfs/cms.cern.ch/cmsset_default.sh`.
-- `TRUTHVIZ_CMSSW_RELEASE`: regular CMSSW release installed at runtime,
-  default `CMSSW_20_1_0_pre3`.
-- `TRUTHVIZ_SCRAM_ARCH`: SCRAM architecture for that release, default
-  `el9_amd64_gcc14`.
-
-In OpenShift, use the included `Dockerfile` based on `cmssw/el9:x86_64`.
-Mount `/cvmfs`; `.s2i/bin/run` sources the CMS bootstrap and uses direct
-`scram`/`cmsRun` in that EL9 container.
-The S2I runtime hook installs CMSSW into the writable volume on first startup
-when the configured release is not found. Set `TRUTHVIZ_SKIP_CMSSW_INSTALL=1`
-only when `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is provided another way.
-
-Local CLI:
-
-```bash
-./visualizeTruthGraph myInputFile.root --event-index 0
-./visualizeTruthGraph myInputFile.root --event-index 4 --no-server
-TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9 ./visualizeTruthGraph myInputFile.root --no-server
-```
-
-## run.sh
-
-`run.sh` is the normal local entry point. It:
-
-1. Resolves the selected DOT file from `--dot` or the default lookup list.
-2. Creates `venv/` if missing.
-3. Activates the virtual environment.
-4. Installs Python dependencies if `networkx` is unavailable.
-5. Reuses or creates the configured CMSSW release under `data/cmssw` when no
-   `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
-6. Rebuilds `data/bundle.json` when missing, stale, or generated from a different DOT file.
-7. Writes `data/.bundle.source` with the absolute DOT path.
-8. Regenerates `app/js/bundle.js` when needed.
-9. Starts `server.py`.
-
-The banner still contains some historical wording, but the app it starts is the Truth Graph Viewer.
+Server-mode jobs never write `data/bundle.json`, `data/rechits.json`, or
+generated `app/js/*.js`. Those paths remain available only to explicit static
+export preprocessing commands.

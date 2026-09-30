@@ -143,7 +143,7 @@
                 </div>
                 <button id="export-png-btn" type="button" title="Save current graph view as PNG">Save PNG</button>
                 <button id="export-pdf-btn" type="button" title="Save current graph view as PDF">Save PDF</button>
-                <button id="upload-btn" style="margin-left: 20px;">Upload Files</button>
+                <button id="upload-btn" style="margin-left: 20px;">Open event</button>
             </div>
         </div>
 
@@ -366,32 +366,35 @@
         </div>
     </div>
 
-    <!-- Upload Modal -->
+    <!-- Event launcher -->
     <div id="upload-modal" class="modal hidden">
-        <div class="modal-content">
+        <div class="modal-content launcher-content">
             <div class="modal-header">
-                <h2>Upload Input Files</h2>
+                <h2>Open an event</h2>
                 <button id="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Upload prepared viewer inputs, process a CMSSW EDM ROOT file, or run a configured sample.</p>
+                <p>Resume a browser session, open a server catalogue sample, or process new input in an isolated temporary job.</p>
                 <form id="upload-form">
-                    <div class="form-group">
-                        <label>Input mode:</label>
-                        <label class="checkbox-label">
-                            <input type="radio" name="input-mode" value="cmssw" checked>
-                            CMSSW ROOT
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="radio" name="input-mode" value="prepared">
-                            Prepared DOT/ROOT
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="radio" name="input-mode" value="sample">
-                            Sample catalogue
-                        </label>
+                    <div class="launcher-choices" role="radiogroup" aria-label="Event source">
+                        <label><input type="radio" name="input-mode" value="saved" checked><span>Saved sessions<small>Stored in this browser</small></span></label>
+                        <label><input type="radio" name="input-mode" value="sample"><span>Sample catalogue<small>Permanent server JSON</small></span></label>
+                        <label><input type="radio" name="input-mode" value="cmssw"><span>CMSSW ROOT<small>Upload or CERN EOS path</small></span></label>
+                        <label><input type="radio" name="input-mode" value="prepared"><span>Prepared input<small>DOT and optional rechits</small></span></label>
                     </div>
-                    <div class="form-group cmssw-input-group">
+
+                    <div class="form-group" data-launcher-mode="saved">
+                        <div id="saved-session-list"></div>
+                        <span class="file-info" id="browser-storage-info"></span>
+                    </div>
+
+                    <div class="form-group" data-launcher-mode="sample">
+                        <label for="sample-select">Sample:</label>
+                        <select id="sample-select"><option value="">Loading samples...</option></select>
+                        <span class="file-info" id="sample-info"></span>
+                    </div>
+
+                    <div class="form-group" data-launcher-mode="cmssw">
                         <label>CMSSW ROOT source:</label>
                         <label class="checkbox-label">
                             <input type="radio" name="cmssw-root-source" value="upload" checked>
@@ -402,47 +405,41 @@
                             Open EOS path
                         </label>
                     </div>
-                    <div class="form-group cmssw-input-group">
+                    <div class="form-group" data-launcher-mode="cmssw" data-root-source="upload">
                         <label for="cmssw-root-file-input">CMSSW EDM ROOT file:</label>
                         <input type="file" id="cmssw-root-file-input" accept=".root">
-                        <span class="file-info" id="cmssw-root-file-info">No file selected</span>
                     </div>
-                    <div class="form-group cmssw-input-group cmssw-root-path-group">
+                    <div class="form-group" data-launcher-mode="cmssw" data-root-source="path">
                         <label for="cmssw-root-path-input">CERN EOS path:</label>
                         <input type="text" id="cmssw-root-path-input" placeholder="/eos/user/.../input.root">
                         <span class="file-info">Use a CMSSW EDM ROOT file on CERN EOS (/eos/user or /eos/cms) shared with the tb18clue3d user.</span>
                     </div>
-                    <div class="form-group cmssw-input-group">
+                    <div class="form-group" data-launcher-mode="cmssw">
                         <label for="event-index-input">Event number:</label>
                         <input type="number" id="event-index-input" min="0" step="1" value="0">
                     </div>
-                    <div class="form-group cmssw-input-group">
+                    <div class="form-group" data-launcher-mode="cmssw">
                         <label for="dumper-args-input">Extra dumper arguments:</label>
                         <input type="text" id="dumper-args-input" placeholder="e.g. --geometry ExtendedRun4D120 --no-keepSpectators">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-launcher-mode="prepared">
                         <label for="dot-file-input">Graph (truthgraph.dot):</label>
-                        <input type="file" id="dot-file-input" accept=".gv,.dot">
-                        <span class="file-info" id="dot-file-info">No file selected</span>
+                        <input type="file" id="dot-file-input" accept=".gv,.dot,.gz">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-launcher-mode="prepared">
                         <label for="root-file-input">Rechits ROOT file (nano_out.root):</label>
                         <input type="file" id="root-file-input" accept=".root">
-                        <span class="file-info" id="root-file-info">No file selected</span>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-launcher-mode="prepared">
                         <label for="rechits-event-index-input">Rechits event number:</label>
                         <input type="number" id="rechits-event-index-input" min="0" step="1" value="0">
                     </div>
-                    <div class="form-group sample-input-group">
-                        <label for="sample-select">Sample:</label>
-                        <select id="sample-select">
-                            <option value="">Loading samples...</option>
-                        </select>
-                        <span class="file-info" id="sample-info"></span>
+                    <div class="form-group" data-launcher-mode="cmssw prepared">
+                        <label for="session-name-input">Saved session name:</label>
+                        <input type="text" id="session-name-input" placeholder="A name will be suggested from the input">
                     </div>
                     <div class="form-actions">
-                        <button type="submit" id="upload-submit-btn">Upload & Process</button>
+                        <button type="submit" id="upload-submit-btn">Process and save</button>
                         <button type="button" id="upload-cancel-btn">Cancel</button>
                     </div>
                     <div id="upload-progress" class="hidden">
@@ -484,6 +481,7 @@
     <script defer src="js/dependency.js"></script>
     <script defer src="js/keyboard.js"></script>
     <script defer src="js/export.js"></script>
+    <script defer src="js/session-store.js"></script>
     <script defer src="js/upload.js"></script>
     <script defer src="js/main.js"></script>
     <script defer src="js/presentation.js"></script>

@@ -63,30 +63,15 @@ If port `8009` is in use, the server tries following ports and prints the one it
 
 Use a specific DOT file:
 
-```bash
-./run.sh --dot /path/to/truthgraph.dot
-```
-
 ## What run.sh Does
 
 `run.sh` performs the local setup and launch:
 
-1. Selects a DOT file from `--dot` or the default lookup list.
-2. Creates `venv/` if it does not exist.
-3. Activates the virtual environment.
-4. Installs Python dependencies from `preprocess/requirements.txt` if needed.
-5. Reuses or creates the configured CMSSW release under `data/cmssw` when no
+1. Creates `venv/` if it does not exist.
+2. Installs Python dependencies from `preprocess/requirements.txt` if needed.
+3. Reuses or creates the configured CMSSW release under `data/cmssw` when no
    `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
-6. Builds `data/bundle.json` from the selected DOT file when missing or stale.
-7. Records the source DOT path in `data/.bundle.source`.
-8. Generates `app/js/bundle.js` for static mode.
-9. Starts `server.py`.
-
-Default DOT lookup:
-
-1. `./truthgraph.dot`
-2. `../truthgraph.dot`
-3. `./dependency.gv`
+4. Starts `server.py` with one isolated-job worker.
 
 ## Manual Setup
 
@@ -128,7 +113,7 @@ python preprocess/build_rechits_json.py rechits.root data/rechits.json --event-i
 
 This also writes `app/js/rechits.js` unless `--no-js-output` is passed.
 
-## Server Mode Upload
+## Server Mode Launcher
 
 Start the server:
 
@@ -136,13 +121,10 @@ Start the server:
 ./run.sh
 ```
 
-In the browser, use **Upload Files** to upload:
-
-- a required DOT file
-- an optional ROOT file
-- an optional rechits event index
-
-The server processes uploads in the background and the browser reloads when processing completes.
+The opening browser launcher can resume or delete IndexedDB sessions, open a
+prebuilt catalogue sample, process CMSSW ROOT upload/EOS input, or process DOT
+plus optional rechits. Processed JSON is saved and verified in the browser
+before its random server job directory is deleted.
 
 ## OpenShift
 
@@ -191,17 +173,14 @@ Expose the service if needed:
 oc expose service/cmsswgraphviz
 ```
 
-On first startup, the server uses an existing `data/bundle.json`, generates one from `truthgraph.dot` or `dependency.gv`, or creates an empty bundle so the upload UI can still be used.
+On startup, the server displays the launcher and does not select or publish a
+shared event.
 
 ## Troubleshooting
 
-### DOT file not found
+### Prepared DOT file does not load
 
-Pass the graph explicitly:
-
-```bash
-./run.sh --dot /absolute/path/to/truthgraph.dot
-```
+Choose **Prepared input** in the opening launcher and upload the DOT file there.
 
 ### Browser shows CDN errors
 
@@ -226,9 +205,9 @@ rechits_rechit_z
 python server.py --start-port 8080 --no-auto-find-port
 ```
 
-### Rebuild from scratch
+### Rebuild a static bundle from scratch
 
 ```bash
 rm -f data/bundle.json data/.bundle.source app/js/bundle.js
-./run.sh --dot truthgraph.dot
+venv/bin/python preprocess/build_bundle.py truthgraph.dot data/bundle.json
 ```

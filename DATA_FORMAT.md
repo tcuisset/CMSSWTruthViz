@@ -1,6 +1,24 @@
 # JSON Data Format
 
-The browser reads a graph bundle generated from a Graphviz DOT file. Optional rechit data can be loaded from a separate ROOT-derived JSON file.
+The browser reads a graph bundle generated from a Graphviz DOT file. Optional
+rechit data comes from ROOT-derived JSON. Server mode transfers both in one
+versioned session envelope so data from different users cannot be mixed.
+
+```json
+{
+  "schemaVersion": 1,
+  "session": {
+    "id": "...",
+    "name": "display name",
+    "sourceType": "upload",
+    "eventIndex": 0,
+    "createdAt": "2026-09-30T00:00:00+00:00"
+  },
+  "bundle": {},
+  "rechits": null,
+  "associations": null
+}
+```
 
 ## Reading the DOT
 
@@ -20,7 +38,8 @@ that `parse_graph.py` adds.
 
 ## Graph Bundle
 
-The main file is `data/bundle.json`:
+The graph object has this shape (and can be written as `data/bundle.json` for a
+static export):
 
 ```json
 {
@@ -125,7 +144,8 @@ The frontend has additional semantic handling when `graph_name` is `TruthLogical
 
 ## Rechits Data
 
-Optional rechit coordinates are stored in `data/rechits.json`:
+Optional rechit coordinates have this shape (and can be written as
+`data/rechits.json` for a static export):
 
 ```json
 {

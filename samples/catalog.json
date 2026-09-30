@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "samples": [
     {
       "id": "single-electron-pt35",
@@ -6,7 +7,11 @@
       "description": "Run4 D120 enableTruth sample from workflow 34002.88 (CMSSW_20_1_0_pre3), two events.",
       "path": "single-electron-pt35.root",
       "eventIndex": 0,
-      "dumperArgs": ["-s", "11,-11", "-d", "0", "--no-keepSpectators", "--attachSources"]
+      "dumperArgs": ["-s", "11,-11", "-d", "0", "--no-keepSpectators", "--attachSources"],
+      "artifacts": {
+        "bundle": "artifacts/single-electron-pt35/bundle.json",
+        "rechits": "artifacts/single-electron-pt35/rechits.json"
+      }
     },
     {
       "id": "dy-to-tautau",
@@ -14,7 +19,11 @@
       "description": "Run4 D120 enableTruth sample from workflow 34045.88 (CMSSW_20_1_0_pre3), two events.",
       "path": "dy-to-tautau.root",
       "eventIndex": 0,
-      "dumperArgs": ["-s", "23,32", "-d", "1", "-g", "15,-15", "--keepSpectators", "--attachSources"]
+      "dumperArgs": ["-s", "23,32", "-d", "1", "-g", "15,-15", "--keepSpectators", "--attachSources"],
+      "artifacts": {
+        "bundle": "artifacts/dy-to-tautau/bundle.json",
+        "rechits": "artifacts/dy-to-tautau/rechits.json"
+      }
     },
     {
       "id": "ttbar-powheg",
@@ -22,7 +31,11 @@
       "description": "Run4 D120 enableTruth POWHEG sample corresponding to custom workflow 34998.88 (CMSSW_20_1_0_pre3), two events.",
       "path": "ttbar-powheg.root",
       "eventIndex": 0,
-      "dumperArgs": ["-s", "6,-6", "-d", "1", "--keepSpectators", "--attachSources", "--keepProductionSiblings"]
+      "dumperArgs": ["-s", "6,-6", "-d", "1", "--keepSpectators", "--attachSources", "--keepProductionSiblings"],
+      "artifacts": {
+        "bundle": "artifacts/ttbar-powheg/bundle.json",
+        "rechits": "artifacts/ttbar-powheg/rechits.json"
+      }
     }
   ]
 }

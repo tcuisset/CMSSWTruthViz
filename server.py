@@ -1,827 +1,520 @@
 #!/usr/bin/env python3
-"""
-Simple HTTP server for the truth graph viewer.
-Serves static files with proper CORS headers for local development.
-Handles DOT file uploads and bundle regeneration.
-"""
+"""HTTP server for isolated truth-graph processing and browser sessions."""
 
-import http.server
-import socketserver
+from __future__ import annotations
+
 import argparse
-import os
-import sys
+import datetime as dt
+import http.server
 import json
-import subprocess
-import threading
-import time
+import os
 import shutil
-import uuid
+import socketserver
+import subprocess
+import sys
 import traceback
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
+from job_manager import Job, JobManager
+from multipart_form import MultipartError, parse_multipart_form
 from truth_pipeline import (
     PipelineOptions,
+    catalog_path,
     default_job_root,
     find_catalog_sample,
     load_catalog,
-    materialize_catalog_sample,
     parse_dumper_args,
     parse_non_negative_int,
     process_cmssw_root,
 )
-from multipart_form import MultipartError, parse_multipart_form
 
 
-EMPTY_BUNDLE = {
-    "nodes": [],
-    "edges": [],
-    "labelToId": {},
-    "metadata": {
-        "graph_name": "empty",
-        "is_directed": True,
-        "node_count": 0,
-        "edge_count": 0,
-    },
-}
-
-BUILD_STATUS_LOCK = threading.Lock()
-BUILD_STATUS = {
-    "state": "idle",
-    "phase": None,
-    "jobId": None,
-    "message": "No bundle build is running.",
-    "startedAt": None,
-    "finishedAt": None,
-    "outputs": None,
-}
-
-
-def get_build_status():
-    """Return a copy of the current background bundle build state."""
-    with BUILD_STATUS_LOCK:
-        return dict(BUILD_STATUS)
-
-
-def set_build_status(**updates):
-    """Update the current background bundle build state."""
-    with BUILD_STATUS_LOCK:
-        BUILD_STATUS.update(updates)
+PROJECT_ROOT = Path(__file__).resolve().parent
+SCHEMA_VERSION = 1
+JOB_MANAGER: JobManager | None = None
 
 
 def truthy_env(name):
-    """Return whether an environment variable is set to a truthy value."""
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_cmssw_root_server_path(raw_path):
-    """Validate a server-side CMSSW ROOT path selected from the upload modal."""
+    """Validate a server-side CMSSW ROOT path selected from the launcher."""
     root_path_text = str(raw_path or "").strip()
     if not root_path_text:
         raise ValueError("CMSSW ROOT path is required")
-
     root_path = Path(root_path_text).expanduser()
     if not root_path.is_absolute():
         raise ValueError("CMSSW ROOT path must be absolute")
-
-    is_eos_path = root_path_text.startswith("/eos/")
-    allow_local_paths = truthy_env("TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS")
-    if not is_eos_path and not allow_local_paths:
+    if not root_path_text.startswith("/eos/") and not truthy_env("TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS"):
         raise ValueError(
             "CMSSW ROOT path must be under /eos/. "
             "Set TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1 for local development tests."
         )
-
     root_path = root_path.resolve()
     if not root_path.exists():
         raise ValueError(f"CMSSW ROOT path does not exist: {root_path}")
     if not root_path.is_file():
         raise ValueError(f"CMSSW ROOT path is not a file: {root_path}")
-
     return root_path
 
 
-def print_cmssw_build_diagnostics(input_root, options, exc):
-    """Print detailed server-side diagnostics for CMSSW ROOT processing failures."""
-    print("\nCMSSW ROOT processing failed")
-    print(f"  exception: {type(exc).__name__}: {exc}")
-    print(f"  input_root: {input_root}")
-    print(f"  job_id: {options.job_id}")
-    print(f"  event_index: {options.event_index}")
-    print(f"  job_root: {options.job_root}")
-    print(f"  cmssw_src: {options.cmssw_src}")
-    print(f"  cmsrun_timeout: {options.cmsrun_timeout}")
-    print(f"  cmsrun_wrapper: {options.cmsrun_wrapper or os.environ.get('TRUTHVIZ_CMSRUN_WRAPPER')}")
-    print(f"  dumper_args: {options.dumper_args}")
-    for name in (
-        "TRUTHVIZ_CMSSW_SRC",
-        "TRUTHVIZ_JOB_ROOT",
-        "TRUTHVIZ_CMSRUN_WRAPPER",
-        "TRUTHVIZ_CMSRUN_TIMEOUT_SEC",
-        "CMSSW_BASE",
-        "SCRAM_ARCH",
-        "CMSSET_DEFAULT",
-    ):
-        value = os.environ.get(name)
-        if value:
-            print(f"  env {name}: {value}")
-    if isinstance(exc, subprocess.TimeoutExpired):
-        print(f"  timeout_seconds: {exc.timeout}")
-        print(f"  command: {exc.cmd}")
-        if exc.output:
-            print("  stdout before timeout:")
-            print(str(exc.output)[-4000:])
-        if exc.stderr:
-            print("  stderr before timeout:")
-            print(str(exc.stderr)[-4000:])
-    print("  traceback:")
-    traceback.print_exception(type(exc), exc, exc.__traceback__)
-    print("")
+def iso_now():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
-def run_uploaded_build(project_root, dot_path, root_path=None, rechits_event_index=0):
-    """Regenerate uploaded graph and optional rechits data in the background."""
-    try:
-        set_build_status(
-            state="running",
-            phase="bundle",
-            message="Regenerating graph bundle...",
-            startedAt=time.time(),
-            finishedAt=None,
-            outputs=None,
+def load_json(path: Path):
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def load_rechits_json(path: Path):
+    payload = load_json(path)
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("source"):
+        metadata["source"] = Path(str(metadata["source"])).name
+    return payload
+
+
+def optional_associations(directory: Path):
+    candidates = sorted(directory.rglob("*association*.json"), key=lambda path: path.stat().st_mtime)
+    return load_json(candidates[-1]) if candidates else None
+
+
+def write_result(job: Job, bundle_path: Path, rechits_path: Path | None, associations=None) -> Path:
+    result_path = job.job_dir / "result.json"
+    envelope = {
+        "schemaVersion": SCHEMA_VERSION,
+        "session": {
+            "id": job.capability,
+            "name": job.metadata["name"],
+            "sourceType": job.metadata["sourceType"],
+            "eventIndex": job.metadata["eventIndex"],
+            "createdAt": job.metadata["createdAt"],
+        },
+        "bundle": load_json(bundle_path),
+        "rechits": load_rechits_json(rechits_path) if rechits_path is not None else None,
+        "associations": associations,
+    }
+    with open(result_path, "w", encoding="utf-8") as handle:
+        json.dump(envelope, handle, separators=(",", ":"))
+    return result_path
+
+
+def run_checked(args, *, timeout=1800):
+    result = subprocess.run(
+        args, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=timeout
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr or result.stdout or "converter failed")
+
+
+def process_job(job: Job, update) -> Path:
+    """Run one queued job without publishing into the shared viewer."""
+    if job.kind == "root":
+        options = PipelineOptions(
+            event_index=job.metadata["eventIndex"],
+            dumper_args=job.payload.get("dumperArgs", []),
+            job_id=job.job_dir.name,
+            job_root=job.job_dir.parent,
+            copy_to_viewer=False,
         )
 
-        print("\nRegenerating bundle...")
-        build_script = project_root / "preprocess" / "build_bundle.py"
-        build_args = [
+        def pipeline_update(**updates):
+            update(
+                phase=updates.get("phase", "running"),
+                message=updates.get("message", "Processing ROOT input..."),
+            )
+
+        result = process_cmssw_root(
+            Path(job.payload["inputRoot"]), options, status_callback=pipeline_update
+        )
+        update(phase="packaging", message="Packaging graph and rechit data for the browser...")
+        return write_result(
+            job,
+            result.bundle_path,
+            result.rechits_json_path,
+            optional_associations(result.cmssw_outdir),
+        )
+
+    if job.kind == "prepared":
+        bundle_path = job.job_dir / "bundle.json"
+        update(phase="bundle", message="Building browser graph bundle...")
+        run_checked([
             sys.executable,
-            str(build_script),
-            str(dot_path),
-            str(project_root / "data" / "bundle.json")
-        ]
-
-        result = subprocess.run(
-            build_args,
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=1800,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr or result.stdout or "unknown error"
-            print(f"  ERROR: {error_msg}")
-            set_build_status(
-                state="error",
-                phase="bundle",
-                message=f"Bundle generation failed: {error_msg}",
-                finishedAt=time.time(),
-            )
-            return
-
-        print("  Bundle generated successfully!")
-        print(result.stdout)
-
-        if root_path is not None:
-            set_build_status(
-                state="running",
-                phase="rechits",
-                message=f"Regenerating rechits data from event {rechits_event_index}...",
-            )
-            print(f"\nRegenerating rechits data from event {rechits_event_index}...")
-            rechits_script = project_root / "preprocess" / "build_rechits_json.py"
-            rechits_args = [
+            str(PROJECT_ROOT / "preprocess" / "build_bundle.py"),
+            job.payload["dotPath"],
+            str(bundle_path),
+            "--no-js-output",
+        ])
+        rechits_path = None
+        if job.payload.get("rootPath"):
+            rechits_path = job.job_dir / "rechits.json"
+            update(phase="rechits", message="Building rechit data...")
+            run_checked([
                 sys.executable,
-                str(rechits_script),
-                str(root_path),
-                str(project_root / "data" / "rechits.json"),
+                str(PROJECT_ROOT / "preprocess" / "build_rechits_json.py"),
+                job.payload["rootPath"],
+                str(rechits_path),
                 "--event-index",
-                str(rechits_event_index),
-            ]
+                str(job.metadata["eventIndex"]),
+                "--no-js-output",
+            ])
+        update(phase="packaging", message="Packaging data for the browser...")
+        return write_result(job, bundle_path, rechits_path)
 
-            result = subprocess.run(
-                rechits_args,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=1800,
-            )
-
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "unknown error"
-                print(f"  ERROR: {error_msg}")
-                set_build_status(
-                    state="error",
-                    phase="rechits",
-                    message=f"Rechits generation failed: {error_msg}",
-                    finishedAt=time.time(),
-                )
-                return
-
-            print("  Rechits data generated successfully!")
-            print(result.stdout)
-
-        set_build_status(
-            state="success",
-            phase="complete",
-            message="Upload processing completed successfully.",
-            finishedAt=time.time(),
-            outputs={
-                "bundlePath": str(project_root / "data" / "bundle.json"),
-                "rechitsJsonPath": str(project_root / "data" / "rechits.json") if root_path is not None else None,
-            },
-        )
-
-    except subprocess.TimeoutExpired:
-        set_build_status(
-            state="error",
-            phase="timeout",
-            message="Upload processing timed out.",
-            finishedAt=time.time(),
-        )
-    except Exception as e:
-        print(f"  ERROR: {str(e)}")
-        set_build_status(
-            state="error",
-            phase="error",
-            message=f"Upload processing failed: {str(e)}",
-            finishedAt=time.time(),
-        )
+    raise ValueError(f"Unsupported job kind: {job.kind}")
 
 
-def run_cmssw_build(input_root, options):
-    """Run the CMSSW ROOT pipeline in the background."""
-    try:
-        def update(**updates):
-            updates.setdefault("state", "running")
-            updates.setdefault("jobId", options.job_id)
-            set_build_status(**updates)
+def get_job_manager() -> JobManager:
+    if JOB_MANAGER is None:
+        raise RuntimeError("Job manager is not configured")
+    return JOB_MANAGER
 
-        result = process_cmssw_root(input_root, options, status_callback=update)
-        set_build_status(
-            state="success",
-            phase="complete",
-            jobId=result.job_id,
-            message="CMSSW ROOT processing completed successfully.",
-            finishedAt=time.time(),
-            outputs=result.as_dict(),
-        )
-    except subprocess.TimeoutExpired as exc:
-        print_cmssw_build_diagnostics(input_root, options, exc)
-        set_build_status(
-            state="error",
-            phase="timeout",
-            jobId=options.job_id,
-            message="CMSSW ROOT processing timed out.",
-            finishedAt=time.time(),
-        )
-    except Exception as exc:
-        print_cmssw_build_diagnostics(input_root, options, exc)
-        set_build_status(
-            state="error",
-            phase="error",
-            jobId=options.job_id,
-            message=f"CMSSW ROOT processing failed: {str(exc)}",
-            finishedAt=time.time(),
-        )
+
+def public_catalog():
+    samples = []
+    for sample in load_catalog().get("samples", []):
+        samples.append({key: sample[key] for key in ("id", "label", "description") if key in sample})
+    return {"schemaVersion": SCHEMA_VERSION, "samples": samples}
+
+
+def resolve_catalog_artifact(sample: dict, key: str) -> Path | None:
+    value = (sample.get("artifacts") or {}).get(key)
+    if not value:
+        return None
+    base = catalog_path().resolve().parent
+    path = (base / value).resolve()
+    if base not in path.parents:
+        raise ValueError(f"Catalogue {key} path escapes the catalogue directory")
+    if not path.is_file():
+        raise FileNotFoundError(f"Catalogue {key} artifact is missing for {sample.get('id')}")
+    return path
+
+
+def catalog_result(sample_id: str):
+    sample = find_catalog_sample(sample_id)
+    bundle_path = resolve_catalog_artifact(sample, "bundle")
+    if bundle_path is None:
+        raise ValueError(f"Catalogue sample {sample_id} has no prebuilt bundle")
+    rechits_path = resolve_catalog_artifact(sample, "rechits")
+    associations_path = resolve_catalog_artifact(sample, "associations")
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "session": {
+            "id": sample_id,
+            "name": sample.get("label", sample_id),
+            "sourceType": "catalog",
+            "eventIndex": parse_non_negative_int(sample.get("eventIndex", 0), "eventIndex"),
+            "createdAt": None,
+        },
+        "bundle": load_json(bundle_path),
+        "rechits": load_rechits_json(rechits_path) if rechits_path else None,
+        "associations": load_json(associations_path) if associations_path else None,
+    }
 
 
 class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """HTTP request handler with CORS support and file upload"""
+    """Serve the app plus capability-scoped processing APIs."""
 
     def end_headers(self):
-        """Add CORS headers before ending headers"""
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         super().end_headers()
 
     def do_OPTIONS(self):
-        """Handle OPTIONS requests for CORS preflight"""
-        self.send_response(200)
+        self.send_response(204)
         self.end_headers()
 
     def do_GET(self):
-        """Handle status requests, then fall back to static file serving."""
-        path = urlparse(self.path).path.rstrip('/')
-        if path == '/upload-status' or path.endswith('/upload-status'):
-            self.send_json_response({
-                'success': True,
-                'build': get_build_status(),
-            })
+        parts = self.api_parts()
+        if parts == ["api", "catalog"]:
+            self.send_json_response({"success": True, "catalog": public_catalog()})
             return
-        if path == '/samples' or path.endswith('/samples'):
-            self.handle_samples()
+        if len(parts) == 4 and parts[:2] == ["api", "catalog"] and parts[3] == "result":
+            try:
+                self.send_json_response(catalog_result(parts[2]))
+            except Exception as exc:
+                status = 404 if "not found" in str(exc).lower() else 500
+                self.send_json_response({"success": False, "error": str(exc)}, status)
             return
-
+        if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "status":
+            status = get_job_manager().status(parts[2])
+            if status is None:
+                self.send_json_response({"success": False, "error": "Job not found"}, 404)
+            else:
+                self.send_json_response({"success": True, "job": status})
+            return
+        if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "result":
+            job = get_job_manager().get(parts[2])
+            if job is None:
+                self.send_json_response({"success": False, "error": "Job not found"}, 404)
+            elif job.state != "success" or job.result_path is None:
+                self.send_json_response({"success": False, "error": "Job result is not ready"}, 409)
+            else:
+                self.send_json_file(job.result_path)
+            return
+        if not parts:
+            self.send_response(302)
+            self.send_header("Location", "/app/")
+            self.end_headers()
+            return
+        if parts[0] != "app":
+            self.send_json_response({"success": False, "error": "Not Found"}, 404)
+            return
         super().do_GET()
 
     def do_POST(self):
-        """Handle POST requests for file uploads"""
-        path = urlparse(self.path).path.rstrip('/')
-        if path == '/upload' or path.endswith('/upload'):
-            self.handle_upload()
-        elif path == '/process-root' or path.endswith('/process-root'):
-            self.handle_process_root()
-        elif '/samples/' in path and path.endswith('/process'):
-            self.handle_process_sample(path)
-        else:
-            self.send_json_response({'success': False, 'error': 'Not Found'}, 404)
-
-    def handle_upload(self):
-        """Handle prepared DOT/ROOT upload and bundle regeneration."""
+        parts = self.api_parts()
         try:
-            if not self.validate_upload_size():
-                return
-
-            # Parse multipart form data
-            content_type = self.headers.get('Content-Type')
-            if not content_type or not content_type.startswith('multipart/form-data'):
-                self.send_json_response({'success': False, 'error': 'Invalid content type'}, 400)
-                return
-
-            # Parse form data
-            try:
-                form = parse_multipart_form(self.rfile, self.headers)
-            except MultipartError as exc:
-                self.send_json_response({'success': False, 'error': str(exc)}, 400)
-                return
-
-            # Get uploaded files
-            dot_item = self.get_upload_item(form, 'dotFile')
-            root_item = self.get_upload_item(form, 'rootFile')
-            mode = self.get_form_value(form, 'mode', 'prepared')
-            if mode != 'prepared':
-                self.send_json_response({
-                    'success': False,
-                    'error': 'Use /process-root for CMSSW ROOT input'
-                }, 400)
-                return
-            try:
-                rechits_event_index = self.get_non_negative_int_field(form, 'rechitsEventIndex', 0)
-            except ValueError as exc:
-                self.send_json_response({'success': False, 'error': str(exc)}, 400)
-                return
-
-            if dot_item is None:
-                self.send_json_response({'success': False, 'error': 'DOT graph file is required'}, 400)
-                return
-
-            # Get project root
-            project_root = Path(__file__).parent
-
-            if get_build_status()["state"] in {"queued", "running"}:
-                self.send_json_response({
-                    'success': False,
-                    'error': 'A bundle build is already running'
-                }, 409)
-                return
-
-            # Save files
-            dot_path = project_root / "truthgraph.dot"
-            root_path = project_root / "rechits.root" if root_item is not None else None
-
-            print("\nSaving uploaded files...")
-            with open(dot_path, 'wb') as f:
-                f.write(dot_item.file.read())
-            print(f"  Saved: {dot_path}")
-
-            if root_item is not None:
-                with open(root_path, 'wb') as f:
-                    f.write(root_item.file.read())
-                print(f"  Saved: {root_path}")
-                print(f"  Rechits event index: {rechits_event_index}")
-
-            set_build_status(
-                state="queued",
-                phase="prepared",
-                jobId=None,
-                message="Input files uploaded. Processing is starting...",
-                startedAt=time.time(),
-                finishedAt=None,
-                outputs=None,
-            )
-            thread = threading.Thread(
-                target=run_uploaded_build,
-                args=(project_root, dot_path, root_path, rechits_event_index),
-                daemon=True,
-            )
-            thread.start()
-
-            self.send_json_response({
-                'success': True,
-                'message': 'Input files uploaded. Processing is running.',
-                'build': get_build_status(),
-            }, 202)
-
-        except Exception as e:
-            print(f"  ERROR: {str(e)}")
-            self.send_json_response({
-                'success': False,
-                'error': f'Upload failed: {str(e)}'
-            }, 500)
-
-    def handle_process_root(self):
-        """Handle CMSSW EDM ROOT upload and launch ROOT-to-viewer processing."""
-        try:
-            if not self.validate_upload_size():
-                return
-
-            content_type = self.headers.get('Content-Type')
-            if not content_type or not content_type.startswith('multipart/form-data'):
-                self.send_json_response({'success': False, 'error': 'Invalid content type'}, 400)
-                return
-
-            try:
-                form = parse_multipart_form(self.rfile, self.headers)
-            except MultipartError as exc:
-                self.send_json_response({'success': False, 'error': str(exc)}, 400)
-                return
-
-            source = self.get_form_value(form, 'source', 'upload')
-            if source not in {'upload', 'path'}:
-                self.send_json_response({'success': False, 'error': 'source must be upload or path'}, 400)
-                return
-
-            root_item = self.get_upload_item(form, 'rootFile')
-            root_path_value = self.get_form_value(form, 'rootPath', '')
-            if source == 'upload' and root_item is None:
-                self.send_json_response({'success': False, 'error': 'CMSSW ROOT file is required'}, 400)
-                return
-
-            if get_build_status()["state"] in {"queued", "running"}:
-                self.send_json_response({
-                    'success': False,
-                    'error': 'A processing job is already running'
-                }, 409)
-                return
-
-            try:
-                event_index = self.get_non_negative_int_field(form, 'eventIndex', 0)
-                dumper_args = parse_dumper_args(self.get_form_value(form, 'dumperArgs', ''))
-            except ValueError as exc:
-                self.send_json_response({'success': False, 'error': str(exc)}, 400)
-                return
-
-            project_root = Path(__file__).parent
-            job_root = default_job_root(project_root)
-            job_id_prefix = "path" if source == "path" else "upload"
-            job_id = f"{int(time.time())}-{job_id_prefix}-{uuid.uuid4().hex[:8]}"
-            if source == 'path':
-                try:
-                    root_path = resolve_cmssw_root_server_path(root_path_value)
-                except ValueError as exc:
-                    self.send_json_response({'success': False, 'error': str(exc)}, 400)
-                    return
+            if parts == ["api", "jobs", "root"]:
+                self.handle_root_job()
+            elif parts == ["api", "jobs", "prepared"]:
+                self.handle_prepared_job()
             else:
-                upload_dir = job_root / job_id / "upload"
-                upload_dir.mkdir(parents=True, exist_ok=False)
-                root_path = upload_dir / "input.root"
-                with open(root_path, 'wb') as f:
-                    shutil.copyfileobj(root_item.file, f)
-
-            options = PipelineOptions(
-                event_index=event_index,
-                dumper_args=dumper_args,
-                job_id=job_id,
-                job_root=job_root,
-            )
-
-            set_build_status(
-                state="queued",
-                phase="cmssw",
-                jobId=job_id,
-                message=(
-                    "CMSSW ROOT file found on server path. Processing is starting..."
-                    if source == "path"
-                    else "CMSSW ROOT file uploaded. Processing is starting..."
-                ),
-                startedAt=time.time(),
-                finishedAt=None,
-                outputs=None,
-            )
-            thread = threading.Thread(
-                target=run_cmssw_build,
-                args=(root_path, options),
-                daemon=True,
-            )
-            thread.start()
-
-            self.send_json_response({
-                'success': True,
-                'message': 'CMSSW ROOT processing is running.',
-                'build': get_build_status(),
-            }, 202)
-
-        except Exception as e:
-            print(f"  ERROR: {str(e)}")
-            self.send_json_response({
-                'success': False,
-                'error': f'CMSSW ROOT processing failed to start: {str(e)}'
-            }, 500)
-
-    def handle_samples(self):
-        """Return the configured sample catalogue."""
-        try:
-            self.send_json_response({'success': True, 'catalog': load_catalog()})
+                self.send_json_response({"success": False, "error": "Not Found"}, 404)
         except Exception as exc:
-            self.send_json_response({'success': False, 'error': str(exc)}, 500)
+            traceback.print_exc()
+            self.send_json_response({"success": False, "error": f"Job could not be started: {exc}"}, 500)
 
-    def handle_process_sample(self, path):
-        """Launch processing for a manifest-declared sample."""
+    def do_DELETE(self):
+        parts = self.api_parts()
+        if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
+            try:
+                deleted = get_job_manager().acknowledge(parts[2])
+            except ValueError as exc:
+                self.send_json_response({"success": False, "error": str(exc)}, 409)
+                return
+            if not deleted:
+                self.send_json_response({"success": False, "error": "Job not found"}, 404)
+            else:
+                self.send_json_response({"success": True})
+            return
+        self.send_json_response({"success": False, "error": "Not Found"}, 404)
+
+    def handle_root_job(self):
+        form = self.parse_upload_form()
+        if form is None:
+            return
+        source = self.get_form_value(form, "source", "upload")
+        root_item = self.get_upload_item(form, "rootFile")
+        if source not in {"upload", "path"}:
+            self.send_json_response({"success": False, "error": "source must be upload or path"}, 400)
+            return
+        if source == "upload" and root_item is None:
+            self.send_json_response({"success": False, "error": "CMSSW ROOT file is required"}, 400)
+            return
         try:
-            if get_build_status()["state"] in {"queued", "running"}:
-                self.send_json_response({
-                    'success': False,
-                    'error': 'A processing job is already running'
-                }, 409)
-                return
-
-            parts = [part for part in path.split('/') if part]
-            route = parts[-3:] if len(parts) >= 3 else []
-            if len(route) != 3 or route[0] != 'samples' or route[2] != 'process':
-                self.send_json_response({'success': False, 'error': 'Not Found'}, 404)
-                return
-
-            sample_id = route[1]
-            sample = find_catalog_sample(sample_id)
-            job_root = default_job_root(Path(__file__).parent)
-            job_id = f"{int(time.time())}-sample-{sample_id}-{uuid.uuid4().hex[:8]}"
-            staging_dir = job_root / job_id / "sample"
-            staging_dir.mkdir(parents=True, exist_ok=False)
-
-            event_index = parse_non_negative_int(sample.get("eventIndex", 0), "eventIndex")
-            dumper_args = sample.get("dumperArgs", [])
-            if isinstance(dumper_args, str):
-                dumper_args = parse_dumper_args(dumper_args)
-            if not isinstance(dumper_args, list):
-                self.send_json_response({'success': False, 'error': 'sample dumperArgs must be a list or string'}, 400)
-                return
-
-            input_root = materialize_catalog_sample(sample, staging_dir)
-            options = PipelineOptions(
-                event_index=event_index,
-                dumper_args=[str(arg) for arg in dumper_args],
-                job_id=job_id,
-                job_root=job_root,
+            event_index = self.get_non_negative_int_field(form, "eventIndex", 0)
+            dumper_args = parse_dumper_args(self.get_form_value(form, "dumperArgs", ""))
+            input_path = (
+                resolve_cmssw_root_server_path(self.get_form_value(form, "rootPath", ""))
+                if source == "path" else None
             )
+        except ValueError as exc:
+            self.send_json_response({"success": False, "error": str(exc)}, 400)
+            return
 
-            set_build_status(
-                state="queued",
-                phase="sample",
-                jobId=job_id,
-                message=f"Sample {sample_id} processing is starting...",
-                startedAt=time.time(),
-                finishedAt=None,
-                outputs=None,
-            )
-            thread = threading.Thread(
-                target=run_cmssw_build,
-                args=(input_root, options),
-                daemon=True,
-            )
-            thread.start()
+        suggested = Path(str(input_path)).name if input_path else Path(root_item.filename).name
+        metadata = self.session_metadata(form, source, event_index, suggested)
+        manager = get_job_manager()
+        job = manager.reserve("root", metadata)
+        try:
+            if source == "upload":
+                upload_dir = job.job_dir / "upload"
+                upload_dir.mkdir()
+                input_path = upload_dir / "input.root"
+                with open(input_path, "wb") as handle:
+                    shutil.copyfileobj(root_item.file, handle)
+            status = manager.enqueue(job.capability, {
+                "inputRoot": str(input_path), "dumperArgs": dumper_args,
+            })
+        except Exception:
+            manager.fail_preparation(job.capability)
+            raise
+        self.send_json_response({"success": True, "job": status}, 202)
 
-            self.send_json_response({
-                'success': True,
-                'message': 'Sample processing is running.',
-                'build': get_build_status(),
-            }, 202)
+    def handle_prepared_job(self):
+        form = self.parse_upload_form()
+        if form is None:
+            return
+        dot_item = self.get_upload_item(form, "dotFile")
+        root_item = self.get_upload_item(form, "rootFile")
+        if dot_item is None:
+            self.send_json_response({"success": False, "error": "DOT graph file is required"}, 400)
+            return
+        try:
+            event_index = self.get_non_negative_int_field(form, "rechitsEventIndex", 0)
+        except ValueError as exc:
+            self.send_json_response({"success": False, "error": str(exc)}, 400)
+            return
+        metadata = self.session_metadata(form, "prepared", event_index, Path(dot_item.filename).stem)
+        manager = get_job_manager()
+        job = manager.reserve("prepared", metadata)
+        try:
+            upload_dir = job.job_dir / "upload"
+            upload_dir.mkdir()
+            dot_path = upload_dir / (Path(dot_item.filename).name or "graph.dot")
+            with open(dot_path, "wb") as handle:
+                shutil.copyfileobj(dot_item.file, handle)
+            root_path = None
+            if root_item is not None:
+                root_path = upload_dir / "rechits.root"
+                with open(root_path, "wb") as handle:
+                    shutil.copyfileobj(root_item.file, handle)
+            status = manager.enqueue(job.capability, {
+                "dotPath": str(dot_path), "rootPath": str(root_path) if root_path else None,
+            })
+        except Exception:
+            manager.fail_preparation(job.capability)
+            raise
+        self.send_json_response({"success": True, "job": status}, 202)
 
-        except Exception as exc:
-            self.send_json_response({'success': False, 'error': str(exc)}, 500)
+    def session_metadata(self, form, source_type, event_index, suggested):
+        name = str(self.get_form_value(form, "sessionName", "") or "").strip()
+        return {
+            "name": name or f"{suggested}, event {event_index}",
+            "sourceType": source_type,
+            "eventIndex": event_index,
+            "createdAt": iso_now(),
+        }
+
+    def parse_upload_form(self):
+        if not self.validate_upload_size():
+            return None
+        if not self.headers.get("Content-Type", "").startswith("multipart/form-data"):
+            self.send_json_response({"success": False, "error": "Invalid content type"}, 400)
+            return None
+        try:
+            return parse_multipart_form(self.rfile, self.headers)
+        except MultipartError as exc:
+            self.send_json_response({"success": False, "error": str(exc)}, 400)
+            return None
+
+    def api_parts(self):
+        return [unquote(part) for part in urlparse(self.path).path.split("/") if part]
 
     def get_upload_item(self, form, key):
-        """Return a file upload item only when the field has a selected file."""
-        if key not in form:
-            return None
-
-        item = form[key]
+        item = form.get(key)
         if isinstance(item, list):
             item = item[0] if item else None
-
-        if item is None or not getattr(item, 'filename', None) or not getattr(item, 'file', None):
-            return None
-
-        return item
+        return item if item is not None and getattr(item, "filename", None) and getattr(item, "file", None) else None
 
     def get_form_value(self, form, key, default=None):
-        """Return a scalar form field value."""
-        if key not in form:
-            return default
-
-        item = form[key]
+        item = form.get(key)
         if isinstance(item, list):
             item = item[0] if item else None
-
-        return getattr(item, 'value', default) if item is not None else default
-
-    def validate_upload_size(self):
-        """Reject uploads above TRUTHVIZ_MAX_UPLOAD_MB when Content-Length is present."""
-        max_mb = int(os.environ.get("TRUTHVIZ_MAX_UPLOAD_MB", "2048"))
-        content_length = self.headers.get('Content-Length')
-        if not content_length:
-            return True
-
-        try:
-            size_bytes = int(content_length)
-        except ValueError:
-            self.send_json_response({'success': False, 'error': 'Invalid Content-Length'}, 400)
-            return False
-
-        if size_bytes > max_mb * 1024 * 1024:
-            self.send_json_response({
-                'success': False,
-                'error': f'Upload exceeds TRUTHVIZ_MAX_UPLOAD_MB={max_mb}'
-            }, 413)
-            return False
-
-        return True
+        return getattr(item, "value", default) if item is not None else default
 
     def get_non_negative_int_field(self, form, key, default):
-        """Return a non-negative integer form field value."""
-        if key not in form:
-            return default
+        return parse_non_negative_int(self.get_form_value(form, key, default), key)
 
-        item = form[key]
-        if isinstance(item, list):
-            item = item[0] if item else None
-
-        value = getattr(item, 'value', default)
-        if value in (None, ""):
-            return default
-
+    def validate_upload_size(self):
+        max_mb = int(os.environ.get("TRUTHVIZ_MAX_UPLOAD_MB", "2048"))
+        raw = self.headers.get("Content-Length")
+        if raw is None:
+            return True
         try:
-            int_value = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{key} must be a non-negative integer") from exc
+            size = int(raw)
+        except ValueError:
+            self.send_json_response({"success": False, "error": "Invalid Content-Length"}, 400)
+            return False
+        if size > max_mb * 1024 * 1024:
+            self.send_json_response({"success": False, "error": f"Upload exceeds TRUTHVIZ_MAX_UPLOAD_MB={max_mb}"}, 413)
+            return False
+        return True
 
-        if int_value < 0:
-            raise ValueError(f"{key} must be a non-negative integer")
-
-        return int_value
+    def send_json_file(self, path: Path):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.end_headers()
+        with open(path, "rb") as handle:
+            shutil.copyfileobj(handle, self.wfile)
 
     def send_json_response(self, data, status=200):
-        """Send JSON response"""
+        payload = json.dumps(data).encode("utf-8")
         self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode('utf-8'))
+        self.wfile.write(payload)
 
     def log_message(self, format, *args):
-        """Custom log format"""
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), format % args))
 
 
-class ReusableTCPServer(socketserver.TCPServer):
-    """TCP server that can restart quickly after a local development run."""
-
+class ReusableThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 def port_number(value):
-    """Parse and validate a TCP port number."""
     try:
         port = int(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"invalid port: {value}") from exc
-
     if not 1 <= port <= 65535:
         raise argparse.ArgumentTypeError("port must be between 1 and 65535")
-
     return port
 
 
 def positive_int(value):
-    """Parse and validate a positive integer."""
     try:
         number = int(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"invalid integer: {value}") from exc
-
     if number < 1:
         raise argparse.ArgumentTypeError("value must be at least 1")
-
     return number
 
 
 def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Run the Truth Graph Viewer local development server."
-    )
-    parser.add_argument(
-        "--host",
-        default="localhost",
-        help="Host interface to bind to. Defaults to localhost.",
-    )
-    parser.add_argument(
-        "--start-port",
-        "--port",
-        dest="start_port",
-        default=8009,
-        type=port_number,
-        help="Port to bind to, or the first port to try when auto-find is enabled. Defaults to 8009.",
-    )
-    parser.add_argument(
-        "--auto-find-port",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Try subsequent ports when the start port is already in use. Enabled by default.",
-    )
-    parser.add_argument(
-        "--max-port-attempts",
-        default=100,
-        type=positive_int,
-        help="Maximum number of ports to try when auto-find is enabled. Defaults to 100.",
-    )
+    parser = argparse.ArgumentParser(description="Run the Truth Graph Viewer server.")
+    parser.add_argument("--host", default="localhost")
+    parser.add_argument("--start-port", "--port", dest="start_port", default=8009, type=port_number)
+    parser.add_argument("--auto-find-port", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--max-port-attempts", default=100, type=positive_int)
     return parser.parse_args()
 
 
 def create_server(host, start_port, handler, auto_find_port=True, max_attempts=100):
-    """Bind to start_port, optionally trying following ports if unavailable."""
     attempts = max_attempts if auto_find_port else 1
-    end_port = min(65535, start_port + attempts - 1)
-
-    for port in range(start_port, end_port + 1):
+    for port in range(start_port, min(65535, start_port + attempts - 1) + 1):
         try:
-            return port, ReusableTCPServer((host, port), handler)
+            return port, ReusableThreadingTCPServer((host, port), handler)
         except OSError as exc:
-            if exc.errno not in {48, 98}:  # EADDRINUSE on macOS/BSD and Linux
+            if exc.errno not in {48, 98} or not auto_find_port:
                 raise
-            if not auto_find_port:
-                raise
-
-    raise RuntimeError(f"No available port found from {start_port} to {end_port}")
-
-
-def ensure_initial_bundle(project_root):
-    """Ensure server mode has a bundle to load after a fresh S2I clone."""
-    bundle_path = project_root / "data" / "bundle.json"
-    if bundle_path.exists():
-        return
-
-    dot_candidates = [
-        project_root / "truthgraph.dot",
-        project_root / "dependency.gv",
-    ]
-    dot_path = next((path for path in dot_candidates if path.exists()), None)
-
-    if dot_path is not None:
-        print(f"Bundle not found. Generating from: {dot_path}")
-        subprocess.run(
-            [
-                sys.executable,
-                str(project_root / "preprocess" / "build_bundle.py"),
-                str(dot_path),
-                str(bundle_path),
-            ],
-            cwd=project_root,
-            check=True,
-        )
-        return
-
-    print("Bundle not found and no DOT file is available. Creating an empty bundle.")
-    bundle_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(bundle_path, "w", encoding="utf-8") as f:
-        json.dump(EMPTY_BUNDLE, f, indent=2)
+    raise RuntimeError(f"No available port found from {start_port}")
 
 
 def main():
+    global JOB_MANAGER
     args = parse_args()
-
-    # Change to project root directory
-    project_root = Path(__file__).parent
-    os.chdir(project_root)
-    ensure_initial_bundle(project_root)
-
+    os.chdir(PROJECT_ROOT)
+    ttl = int(os.environ.get("TRUTHVIZ_JOB_TTL_SEC", str(24 * 60 * 60)))
+    JOB_MANAGER = JobManager(default_job_root(PROJECT_ROOT), process_job, ttl_seconds=ttl)
     port, httpd = create_server(
-        args.host,
-        args.start_port,
-        CORSRequestHandler,
-        auto_find_port=args.auto_find_port,
-        max_attempts=args.max_port_attempts,
+        args.host, args.start_port, CORSRequestHandler,
+        auto_find_port=args.auto_find_port, max_attempts=args.max_port_attempts,
     )
-
-    print("=" * 60)
-    print("Truth Graph Viewer Server")
-    print("=" * 60)
-    print(f"\nServing from: {project_root}")
-    print(f"Server address: http://{args.host}:{port}")
-    print(f"Application URL: http://{args.host}:{port}/app/")
-    print("\nPress Ctrl+C to stop the server")
-    print("=" * 60)
-    print()
-
-    with httpd:
-        try:
+    print(f"Truth Graph Viewer: http://{args.host}:{port}/app/")
+    try:
+        with httpd:
             httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\n\nShutting down server...")
-            httpd.shutdown()
-            print("Server stopped.")
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+    finally:
+        JOB_MANAGER.shutdown()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        raise

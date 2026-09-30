@@ -1,448 +1,331 @@
-/**
- * upload.js - File upload functionality
- * Handles prepared DOT/ROOT uploads, CMSSW ROOT processing, and catalogue samples.
- */
-
+/** Launcher, isolated job submission, and browser-session handoff. */
 const UploadManager = {
+    apiBase: '../api',
     modal: null,
     form: null,
-    modeInputs: null,
-    cmsswRootSourceInputs: null,
-    cmsswRootFileInput: null,
-    cmsswRootFileInfo: null,
-    cmsswRootPathInput: null,
-    eventIndexInput: null,
-    dumperArgsInput: null,
-    dotFileInput: null,
-    dotFileInfo: null,
-    rootFileInput: null,
-    rootFileInfo: null,
-    rechitsEventIndexInput: null,
-    sampleSelect: null,
-    sampleInfo: null,
-    uploadProgress: null,
-    uploadStatus: null,
-    submitBtn: null,
     samples: [],
+    pendingResultJob: null,
+    pendingSavedSession: null,
+    required: false,
 
-    /**
-     * Initialize upload manager
-     */
-    init() {
+    async init() {
         this.modal = document.getElementById('upload-modal');
         this.form = document.getElementById('upload-form');
         this.modeInputs = Array.from(document.querySelectorAll('input[name="input-mode"]'));
-        this.cmsswRootSourceInputs = Array.from(document.querySelectorAll('input[name="cmssw-root-source"]'));
-        this.cmsswRootFileInput = document.getElementById('cmssw-root-file-input');
-        this.cmsswRootFileInfo = document.getElementById('cmssw-root-file-info');
-        this.cmsswRootPathInput = document.getElementById('cmssw-root-path-input');
-        this.eventIndexInput = document.getElementById('event-index-input');
-        this.dumperArgsInput = document.getElementById('dumper-args-input');
-        this.dotFileInput = document.getElementById('dot-file-input');
-        this.dotFileInfo = document.getElementById('dot-file-info');
-        this.rootFileInput = document.getElementById('root-file-input');
-        this.rootFileInfo = document.getElementById('root-file-info');
-        this.rechitsEventIndexInput = document.getElementById('rechits-event-index-input');
-        this.sampleSelect = document.getElementById('sample-select');
-        this.sampleInfo = document.getElementById('sample-info');
-        this.uploadProgress = document.getElementById('upload-progress');
-        this.uploadStatus = document.getElementById('upload-status');
+        this.sourceInputs = Array.from(document.querySelectorAll('input[name="cmssw-root-source"]'));
         this.submitBtn = document.getElementById('upload-submit-btn');
-
+        this.closeBtn = document.getElementById('modal-close-btn');
+        this.cancelBtn = document.getElementById('upload-cancel-btn');
+        this.status = document.getElementById('upload-status');
+        this.progress = document.getElementById('upload-progress');
+        this.sessionName = document.getElementById('session-name-input');
+        this.rootFile = document.getElementById('cmssw-root-file-input');
+        this.rootPath = document.getElementById('cmssw-root-path-input');
+        this.eventIndex = document.getElementById('event-index-input');
+        this.dumperArgs = document.getElementById('dumper-args-input');
+        this.dotFile = document.getElementById('dot-file-input');
+        this.rechitsFile = document.getElementById('root-file-input');
+        this.rechitsEventIndex = document.getElementById('rechits-event-index-input');
+        this.sampleSelect = document.getElementById('sample-select');
         this.setupEventListeners();
         this.updateModeVisibility();
-        this.loadSamples();
     },
 
-    /**
-     * Setup event listeners
-     */
     setupEventListeners() {
-        // Open modal button
-        document.getElementById('upload-btn').addEventListener('click', () => {
-            this.openModal();
+        document.getElementById('upload-btn').addEventListener('click', () => this.returnToLauncher());
+        this.closeBtn.addEventListener('click', () => this.closeModal());
+        this.cancelBtn.addEventListener('click', () => this.closeModal());
+        this.modal.addEventListener('click', event => {
+            if (event.target === this.modal && !this.required) this.closeModal();
         });
-
-        // Close modal buttons
-        document.getElementById('modal-close-btn').addEventListener('click', () => {
-            this.closeModal();
+        this.modeInputs.forEach(input => input.addEventListener('change', () => this.updateModeVisibility()));
+        this.sourceInputs.forEach(input => input.addEventListener('change', () => this.updateModeVisibility()));
+        this.form.addEventListener('submit', event => {
+            event.preventDefault();
+            this.handleSubmit();
         });
-
-        document.getElementById('upload-cancel-btn').addEventListener('click', () => {
-            this.closeModal();
+        this.rootFile.addEventListener('change', () => this.suggestName());
+        this.rootPath.addEventListener('change', () => this.suggestName());
+        this.dotFile.addEventListener('change', () => this.suggestName());
+        this.eventIndex.addEventListener('input', () => this.suggestName());
+        this.rechitsEventIndex.addEventListener('input', () => this.suggestName());
+        this.sessionName.addEventListener('input', () => {
+            this.sessionName.dataset.edited = this.sessionName.value ? 'true' : 'false';
         });
-
-        // Close on background click
-        this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.closeModal();
-            }
-        });
-
-        this.modeInputs.forEach(input => {
-            input.addEventListener('change', () => this.updateModeVisibility());
-        });
-        this.cmsswRootSourceInputs.forEach(input => {
-            input.addEventListener('change', () => this.updateCmsswSourceVisibility());
-        });
-
-        // File input changes
-        this.cmsswRootFileInput.addEventListener('change', (e) => {
-            this.updateFileInfo(e.target, this.cmsswRootFileInfo);
-        });
-        this.dotFileInput.addEventListener('change', (e) => {
-            this.updateFileInfo(e.target, this.dotFileInfo);
-        });
-        this.rootFileInput.addEventListener('change', (e) => {
-            this.updateFileInfo(e.target, this.rootFileInfo);
-        });
-        this.sampleSelect.addEventListener('change', () => {
-            this.updateSampleInfo();
-        });
-
-        // Form submit
-        this.form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleUpload();
-        });
+        this.sampleSelect.addEventListener('change', () => this.updateSampleInfo());
     },
 
-    /**
-     * Open upload modal
-     */
-    openModal() {
+    async showLauncher(required = false) {
+        this.required = required;
+        this.closeBtn.classList.toggle('hidden', required);
+        this.cancelBtn.classList.toggle('hidden', required);
         this.modal.classList.remove('hidden');
-        this.resetForm();
+        await Promise.all([this.loadSamples(), this.renderSavedSessions()]);
     },
 
-    /**
-     * Close upload modal
-     */
     closeModal() {
-        this.modal.classList.add('hidden');
-        this.resetForm();
+        if (!this.required) this.modal.classList.add('hidden');
     },
 
-    /**
-     * Reset form
-     */
-    resetForm() {
-        this.form.reset();
-        this.cmsswRootFileInfo.textContent = 'No file selected';
-        this.cmsswRootPathInput.value = '';
-        this.dotFileInfo.textContent = 'No file selected';
-        this.rootFileInfo.textContent = 'No file selected';
-        this.eventIndexInput.value = '0';
-        this.dumperArgsInput.value = '';
-        this.rechitsEventIndexInput.value = '0';
-        this.uploadProgress.classList.add('hidden');
-        this.submitBtn.disabled = false;
-        this.updateModeVisibility();
-        this.updateCmsswSourceVisibility();
-        this.updateSampleInfo();
+    returnToLauncher() {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.hash = '';
+        window.location.assign(url.toString());
     },
 
-    /**
-     * Update file info display
-     */
-    updateFileInfo(input, infoElement) {
-        if (input.files.length > 0) {
-            const file = input.files[0];
-            const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-            infoElement.textContent = `${file.name} (${sizeMB} MB)`;
-        } else {
-            infoElement.textContent = 'No file selected';
-        }
-    },
-
-    /**
-     * Handle file upload
-     */
-    async handleUpload() {
-        const mode = this.getMode();
-
-        try {
-            if (mode === 'cmssw') {
-                await this.handleCmsswRootUpload();
-                return;
-            }
-
-            if (mode === 'sample') {
-                await this.handleSampleProcessing();
-                return;
-            }
-
-            await this.handlePreparedUpload();
-        } catch (error) {
-            console.error('Upload error:', error);
-            this.uploadStatus.textContent = `Error: ${error.message}`;
-            this.submitBtn.disabled = false;
-            alert(`Processing failed: ${error.message}`);
-        }
-    },
-
-    async handlePreparedUpload() {
-        const dotFile = this.dotFileInput.files[0];
-        const rootFile = this.rootFileInput.files[0];
-        const rechitsEventIndex = this.parseNonNegativeInteger(this.rechitsEventIndexInput.value);
-
-        if (!dotFile) {
-            alert('Please select a DOT graph file');
-            return;
-        }
-
-        if (rootFile && rechitsEventIndex === null) {
-            alert('Please enter a non-negative rechits event number');
-            return;
-        }
-
-        // Show progress
-        this.uploadProgress.classList.remove('hidden');
-        this.uploadStatus.textContent = 'Uploading files...';
-        this.submitBtn.disabled = true;
-
-        const formData = new FormData();
-        formData.append('mode', 'prepared');
-        formData.append('dotFile', dotFile);
-        if (rootFile) {
-            formData.append('rootFile', rootFile);
-            formData.append('rechitsEventIndex', String(rechitsEventIndex));
-        }
-
-        const response = await fetch('../upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await this.parseJsonResponse(response, 'Upload');
-        await this.finishStartedProcessing(result, 'Upload complete. Processing files...');
-    },
-
-    async handleCmsswRootUpload() {
-        const source = this.getCmsswRootSource();
-        const rootFile = this.cmsswRootFileInput.files[0];
-        const rootPath = this.cmsswRootPathInput.value.trim();
-        const eventIndex = this.parseNonNegativeInteger(this.eventIndexInput.value);
-
-        if (source === 'upload' && !rootFile) {
-            alert('Please select a CMSSW EDM ROOT file');
-            return;
-        }
-
-        if (source === 'path' && !rootPath) {
-            alert('Please enter a CERN EOS path');
-            return;
-        }
-
-        if (eventIndex === null) {
-            alert('Please enter a non-negative event number');
-            return;
-        }
-
-        this.uploadProgress.classList.remove('hidden');
-        this.uploadStatus.textContent = source === 'path'
-            ? 'Starting CMSSW ROOT processing from EOS path...'
-            : 'Uploading CMSSW ROOT file...';
-        this.submitBtn.disabled = true;
-
-        const formData = new FormData();
-        formData.append('source', source);
-        if (source === 'path') {
-            formData.append('rootPath', rootPath);
-        } else {
-            formData.append('rootFile', rootFile);
-        }
-        formData.append('eventIndex', String(eventIndex));
-        if (this.dumperArgsInput.value.trim()) {
-            formData.append('dumperArgs', this.dumperArgsInput.value.trim());
-        }
-
-        const response = await fetch('../process-root', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await this.parseJsonResponse(response, 'CMSSW ROOT processing');
-        await this.finishStartedProcessing(
-            result,
-            source === 'path' ? 'Processing EOS file with cmsRun...' : 'Upload complete. Running cmsRun...'
-        );
-    },
-
-    async handleSampleProcessing() {
-        const sampleId = this.sampleSelect.value;
-        if (!sampleId) {
-            alert('Please select a sample');
-            return;
-        }
-
-        this.uploadProgress.classList.remove('hidden');
-        this.uploadStatus.textContent = 'Starting sample processing...';
-        this.submitBtn.disabled = true;
-
-        const response = await fetch(`../samples/${encodeURIComponent(sampleId)}/process`, {
-            method: 'POST'
-        });
-
-        const result = await this.parseJsonResponse(response, 'Sample processing');
-        await this.finishStartedProcessing(result, 'Sample processing started...');
-    },
-
-    async finishStartedProcessing(result, initialMessage) {
-        if (!result.success) {
-            throw new Error(result.error || 'Processing failed');
-        }
-
-        this.uploadStatus.textContent = initialMessage;
-        await this.waitForBundleBuild();
-
-        this.uploadStatus.textContent = 'Files processed successfully! Reloading...';
-        setTimeout(() => {
-            window.location.reload();
-        }, 1500);
-    },
-
-    /**
-     * Parse a JSON response and produce a useful error for proxy/server HTML pages.
-     */
-    async parseJsonResponse(response, label) {
-        const responseText = await response.text();
-        let result;
-        try {
-            result = JSON.parse(responseText);
-        } catch (error) {
-            const message = response.ok
-                ? `${label} response was not valid JSON`
-                : `${label} failed with HTTP ${response.status}`;
-            throw new Error(message);
-        }
-
-        if (!response.ok || result.success === false) {
-            throw new Error(result.error || `${label} failed with HTTP ${response.status}`);
-        }
-
-        return result;
-    },
-
-    /**
-     * Poll the server until the asynchronous bundle build finishes.
-     */
-    async waitForBundleBuild() {
-        const startedAt = Date.now();
-        const timeoutMs = 60 * 60 * 1000;
-
-        while (Date.now() - startedAt < timeoutMs) {
-            await this.sleep(2000);
-
-            const response = await fetch('../upload-status');
-            const result = await this.parseJsonResponse(response, 'Build status');
-            const build = result.build || {};
-
-            if (build.state === 'success') {
-                return;
-            }
-
-            if (build.state === 'error') {
-                throw new Error(build.message || 'Bundle generation failed');
-            }
-
-            if (build.message) {
-                this.uploadStatus.textContent = build.message;
-            }
-        }
-
-        throw new Error('Bundle generation is still running after 60 minutes');
-    },
-
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    },
-
-    parseNonNegativeInteger(rawValue) {
-        const value = String(rawValue).trim();
-        if (value === '') return 0;
-
-        const eventIndex = Number(value);
-        if (!Number.isInteger(eventIndex) || eventIndex < 0) return null;
-
-        return eventIndex;
+    navigateTo(kind, id) {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set(kind, id);
+        window.location.assign(url.toString());
     },
 
     getMode() {
-        const selected = this.modeInputs.find(input => input.checked);
-        return selected ? selected.value : 'cmssw';
+        return this.modeInputs.find(input => input.checked)?.value || 'saved';
     },
 
-    getCmsswRootSource() {
-        const selected = this.cmsswRootSourceInputs.find(input => input.checked);
-        return selected ? selected.value : 'upload';
+    getSource() {
+        return this.sourceInputs.find(input => input.checked)?.value || 'upload';
     },
 
     updateModeVisibility() {
         const mode = this.getMode();
-        const cmsswGroups = Array.from(document.querySelectorAll('.cmssw-input-group'));
-        const sampleGroups = Array.from(document.querySelectorAll('.sample-input-group'));
-        const preparedGroups = [
-            this.dotFileInput.closest('.form-group'),
-            this.rootFileInput.closest('.form-group'),
-            this.rechitsEventIndexInput.closest('.form-group')
-        ];
-
-        cmsswGroups.forEach(group => group.classList.toggle('hidden', mode !== 'cmssw'));
-        preparedGroups.forEach(group => group.classList.toggle('hidden', mode !== 'prepared'));
-        sampleGroups.forEach(group => group.classList.toggle('hidden', mode !== 'sample'));
-        this.submitBtn.textContent = mode === 'sample' ? 'Process Sample' : 'Upload & Process';
-        this.updateCmsswSourceVisibility();
+        document.querySelectorAll('[data-launcher-mode]').forEach(element => {
+            const modes = element.dataset.launcherMode.split(' ');
+            element.classList.toggle('hidden', !modes.includes(mode));
+        });
+        const source = this.getSource();
+        document.querySelectorAll('[data-root-source]').forEach(element => {
+            element.classList.toggle('hidden', element.dataset.rootSource !== source || mode !== 'cmssw');
+        });
+        this.submitBtn.classList.toggle('hidden', mode === 'saved');
+        this.submitBtn.textContent = mode === 'sample' ? 'Open sample' : 'Process and save';
+        this.suggestName();
     },
 
-    updateCmsswSourceVisibility() {
+    suggestName() {
         const mode = this.getMode();
-        const source = this.getCmsswRootSource();
-        const fileGroup = this.cmsswRootFileInput.closest('.form-group');
-        const pathGroup = this.cmsswRootPathInput.closest('.form-group');
+        if (!['cmssw', 'prepared'].includes(mode) || this.sessionName.dataset.edited === 'true') return;
+        let sourceName = '';
+        let eventIndex = '0';
+        if (mode === 'cmssw') {
+            sourceName = this.getSource() === 'path'
+                ? this.rootPath.value.trim().split('/').pop()
+                : this.rootFile.files[0]?.name;
+            eventIndex = this.eventIndex.value || '0';
+        } else {
+            sourceName = this.dotFile.files[0]?.name;
+            eventIndex = this.rechitsEventIndex.value || '0';
+        }
+        if (!sourceName) return;
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+        this.sessionName.value = `${sourceName}, event ${eventIndex} — ${stamp}`;
+    },
 
-        fileGroup.classList.toggle('hidden', mode !== 'cmssw' || source !== 'upload');
-        pathGroup.classList.toggle('hidden', mode !== 'cmssw' || source !== 'path');
+    async handleSubmit() {
+        try {
+            if (this.pendingResultJob) {
+                if (this.pendingSavedSession) {
+                    await this.acknowledgeAndOpen(this.pendingResultJob, this.pendingSavedSession);
+                } else {
+                    await this.downloadAndSave(this.pendingResultJob);
+                }
+                return;
+            }
+            const mode = this.getMode();
+            if (mode === 'sample') {
+                if (!this.sampleSelect.value) throw new Error('Please select a catalogue sample');
+                this.navigateTo('catalog', this.sampleSelect.value);
+                return;
+            }
+            const formData = mode === 'cmssw' ? this.rootFormData() : this.preparedFormData();
+            this.setBusy(true, 'Uploading input...');
+            const endpoint = mode === 'cmssw' ? 'root' : 'prepared';
+            const response = await fetch(`${this.apiBase}/jobs/${endpoint}`, {method: 'POST', body: formData});
+            const payload = await this.parseResponse(response, 'Job submission');
+            await this.waitForJob(payload.job.id);
+            await this.downloadAndSave(payload.job.id);
+        } catch (error) {
+            console.error(error);
+            this.setBusy(false, `Error: ${error.message}`);
+        }
+    },
+
+    rootFormData() {
+        const source = this.getSource();
+        const eventIndex = this.nonNegativeInteger(this.eventIndex.value, 'event number');
+        if (source === 'upload' && !this.rootFile.files[0]) throw new Error('Please select a CMSSW ROOT file');
+        if (source === 'path' && !this.rootPath.value.trim()) throw new Error('Please enter a CERN EOS path');
+        const form = new FormData();
+        form.append('source', source);
+        if (source === 'upload') form.append('rootFile', this.rootFile.files[0]);
+        else form.append('rootPath', this.rootPath.value.trim());
+        form.append('eventIndex', String(eventIndex));
+        form.append('sessionName', this.sessionName.value.trim());
+        if (this.dumperArgs.value.trim()) form.append('dumperArgs', this.dumperArgs.value.trim());
+        return form;
+    },
+
+    preparedFormData() {
+        if (!this.dotFile.files[0]) throw new Error('Please select a DOT graph file');
+        const eventIndex = this.nonNegativeInteger(this.rechitsEventIndex.value, 'rechits event number');
+        const form = new FormData();
+        form.append('dotFile', this.dotFile.files[0]);
+        if (this.rechitsFile.files[0]) form.append('rootFile', this.rechitsFile.files[0]);
+        form.append('rechitsEventIndex', String(eventIndex));
+        form.append('sessionName', this.sessionName.value.trim());
+        return form;
+    },
+
+    async waitForJob(id) {
+        const deadline = Date.now() + 60 * 60 * 1000;
+        while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const response = await fetch(`${this.apiBase}/jobs/${encodeURIComponent(id)}/status`);
+            const payload = await this.parseResponse(response, 'Job status');
+            const job = payload.job;
+            const queue = job.queuePosition ? ` (queue position ${job.queuePosition})` : '';
+            this.status.textContent = `${job.message || job.phase}${queue}`;
+            if (job.state === 'success') return;
+            if (job.state === 'error') throw new Error(job.message || 'Processing failed');
+        }
+        throw new Error('Processing is still running after 60 minutes');
+    },
+
+    async downloadAndSave(id) {
+        this.pendingResultJob = id;
+        this.setBusy(true, 'Downloading processed JSON...');
+        try {
+            const response = await fetch(`${this.apiBase}/jobs/${encodeURIComponent(id)}/result`);
+            const result = await this.parseResponse(response, 'Job result');
+            this.status.textContent = 'Saving the event in this browser...';
+            await SessionStore.requestPersistence();
+            const saved = await SessionStore.saveServerResult(result);
+            this.pendingSavedSession = saved;
+            await this.acknowledgeAndOpen(id, saved);
+        } catch (error) {
+            this.submitBtn.textContent = this.pendingSavedSession ? 'Retry server cleanup' : 'Retry browser save';
+            throw new Error(`${error.message}. The server copy has been retained for retry.`);
+        }
+    },
+
+    async acknowledgeAndOpen(id, saved) {
+        try {
+            this.status.textContent = 'Browser copy verified. Removing temporary server files...';
+            const acknowledgement = await fetch(`${this.apiBase}/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'});
+            await this.parseResponse(acknowledgement, 'Server cleanup');
+            this.pendingResultJob = null;
+            this.pendingSavedSession = null;
+            this.navigateTo('session', saved.session.id);
+        } catch (error) {
+            throw error;
+        }
     },
 
     async loadSamples() {
         try {
-            const response = await fetch('../samples');
-            const result = await this.parseJsonResponse(response, 'Sample catalogue');
-            this.samples = (result.catalog && result.catalog.samples) || [];
-            this.renderSamples();
-        } catch (error) {
-            this.samples = [];
-            this.sampleSelect.innerHTML = '<option value="">No samples available</option>';
-            this.sampleInfo.textContent = error.message;
-        }
-    },
-
-    renderSamples() {
-        if (!this.samples.length) {
-            this.sampleSelect.innerHTML = '<option value="">No samples configured</option>';
+            const response = await fetch(`${this.apiBase}/catalog`);
+            const payload = await this.parseResponse(response, 'Catalogue');
+            this.samples = payload.catalog.samples || [];
+            this.sampleSelect.innerHTML = this.samples.map(sample =>
+                `<option value="${this.escapeHtml(sample.id)}">${this.escapeHtml(sample.label || sample.id)}</option>`
+            ).join('') || '<option value="">No samples available</option>';
             this.updateSampleInfo();
-            return;
+        } catch (error) {
+            this.sampleSelect.innerHTML = '<option value="">Catalogue unavailable</option>';
+            document.getElementById('sample-info').textContent = error.message;
         }
-
-        this.sampleSelect.innerHTML = this.samples.map(sample => (
-            `<option value="${this.escapeHtml(sample.id)}">${this.escapeHtml(sample.label || sample.id)}</option>`
-        )).join('');
-        this.updateSampleInfo();
     },
 
     updateSampleInfo() {
         const sample = this.samples.find(item => item.id === this.sampleSelect.value);
-        this.sampleInfo.textContent = sample ? (sample.description || '') : '';
+        document.getElementById('sample-info').textContent = sample?.description || '';
+    },
+
+    async renderSavedSessions() {
+        const container = document.getElementById('saved-session-list');
+        try {
+            const [sessions, storage] = await Promise.all([SessionStore.list(), SessionStore.storageInfo()]);
+            if (!sessions.length) {
+                container.innerHTML = '<p class="empty-sessions">No sessions saved in this browser yet.</p>';
+            } else {
+                container.innerHTML = sessions.map(record => {
+                    const session = record.session;
+                    return `<div class="saved-session-row">
+                        <div><strong>${this.escapeHtml(session.name)}</strong>
+                        <span>${this.escapeHtml(session.sourceType)} · event ${session.eventIndex} · ${this.formatDate(session.createdAt)} · ${this.formatBytes(session.sizeBytes)}</span></div>
+                        <button type="button" data-open-session="${this.escapeHtml(session.id)}">Open</button>
+                        <button type="button" class="delete-session" data-delete-session="${this.escapeHtml(session.id)}">Delete</button>
+                    </div>`;
+                }).join('');
+                container.querySelectorAll('[data-open-session]').forEach(button =>
+                    button.addEventListener('click', () => this.navigateTo('session', button.dataset.openSession))
+                );
+                container.querySelectorAll('[data-delete-session]').forEach(button =>
+                    button.addEventListener('click', () => this.deleteSession(button.dataset.deleteSession))
+                );
+            }
+            const info = document.getElementById('browser-storage-info');
+            info.textContent = storage?.quota
+                ? `Browser storage: ${this.formatBytes(storage.usage || 0)} used of approximately ${this.formatBytes(storage.quota)}.`
+                : 'Sessions are local to this browser profile.';
+        } catch (error) {
+            container.innerHTML = `<p class="empty-sessions">Browser storage unavailable: ${this.escapeHtml(error.message)}</p>`;
+        }
+    },
+
+    async deleteSession(id) {
+        const record = await SessionStore.get(id);
+        if (!record) return;
+        if (!window.confirm(`Delete the saved session “${record.session.name}”?`)) return;
+        await SessionStore.delete(id);
+        await this.renderSavedSessions();
+    },
+
+    async parseResponse(response, label) {
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (error) {
+            throw new Error(`${label} returned HTTP ${response.status} without valid JSON`);
+        }
+        if (!response.ok || payload.success === false) {
+            throw new Error(payload.error || `${label} failed with HTTP ${response.status}`);
+        }
+        return payload;
+    },
+
+    setBusy(busy, message) {
+        this.progress.classList.remove('hidden');
+        this.submitBtn.disabled = busy;
+        this.status.textContent = message;
+        if (!busy) this.submitBtn.disabled = false;
+    },
+
+    nonNegativeInteger(value, label) {
+        const number = Number(value || 0);
+        if (!Number.isInteger(number) || number < 0) throw new Error(`${label} must be a non-negative integer`);
+        return number;
+    },
+
+    formatBytes(bytes) {
+        if (!Number.isFinite(bytes)) return 'size unknown';
+        const units = ['B', 'KiB', 'MiB', 'GiB'];
+        let value = bytes;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
+        return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+    },
+
+    formatDate(value) {
+        const date = new Date(value);
+        return Number.isNaN(date.valueOf()) ? 'unknown date' : date.toLocaleString();
     },
 
     escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, character => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
         }[character]));
-    }
+    },
 };

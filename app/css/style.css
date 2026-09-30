@@ -955,6 +955,99 @@ body {
     overflow-y: auto;
 }
 
+.modal-content.launcher-content {
+    max-width: 820px;
+}
+
+.launcher-choices {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.launcher-choices label {
+    position: relative;
+    cursor: pointer;
+}
+
+.launcher-choices input {
+    position: absolute;
+    opacity: 0;
+}
+
+.launcher-choices span {
+    display: flex;
+    min-height: 62px;
+    padding: 10px;
+    flex-direction: column;
+    justify-content: center;
+    border: 2px solid #bdc3c7;
+    border-radius: 6px;
+    color: #2c3e50;
+    font-weight: 700;
+    text-align: center;
+}
+
+.launcher-choices small {
+    margin-top: 4px;
+    color: #7f8c8d;
+    font-weight: 400;
+}
+
+.launcher-choices input:checked + span {
+    border-color: #2980b9;
+    background: #eaf4fb;
+}
+
+#saved-session-list {
+    display: grid;
+    gap: 8px;
+    max-height: 42vh;
+    overflow-y: auto;
+}
+
+.saved-session-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #d9e1e5;
+    border-radius: 5px;
+}
+
+.saved-session-row strong,
+.saved-session-row span {
+    display: block;
+}
+
+.saved-session-row span {
+    margin-top: 3px;
+    color: #7f8c8d;
+    font-size: 12px;
+}
+
+.saved-session-row button {
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 4px;
+    background: #2980b9;
+    color: white;
+    cursor: pointer;
+}
+
+.saved-session-row .delete-session {
+    background: #c0392b;
+}
+
+.empty-sessions {
+    padding: 18px;
+    border: 1px dashed #bdc3c7;
+    border-radius: 5px;
+    text-align: center;
+}
+
 .modal-header {
     display: flex;
     align-items: center;
@@ -987,6 +1080,12 @@ body {
 
 #modal-close-btn:hover {
     background: #c0392b;
+}
+
+#modal-close-btn.hidden,
+#upload-cancel-btn.hidden,
+#upload-submit-btn.hidden {
+    display: none;
 }
 
 .modal-body {
@@ -1149,6 +1248,10 @@ body {
 }
 
 @media (max-width: 900px) {
+    .launcher-choices {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     #main-content {
         flex-direction: column;
     }

@@ -36,7 +36,7 @@ command. If an existing Deployment still has a command such as
 oc set command deployment/cmsswgraphviz -- /opt/app-root/src/.s2i/bin/run
 ```
 
-For `/process-root` and catalogue samples, the runtime environment must provide:
+For uploaded ROOT and EOS processing, the runtime environment must provide:
 
 - `/cvmfs/cms.cern.ch` mounted in the running pod,
 - a writable persistent volume for `TRUTHVIZ_JOB_ROOT`.
@@ -68,12 +68,11 @@ After CMSSW setup, `.s2i/bin/run` starts:
 python server.py --host 0.0.0.0 --start-port ${PORT:-8080} --no-auto-find-port
 ```
 
-On startup, `server.py`:
-
-- uses `data/bundle.json` if it exists,
-- generates `data/bundle.json` from `truthgraph.dot` or `dependency.gv` if either file is present,
-- otherwise creates an empty bundle so the web UI can start and accept DOT uploads.
-- rejects startup if neither direct CMSSW tooling nor a configured wrapper is available.
+On startup, `server.py` opens the event launcher, starts one FIFO processing
+worker, and cleans abandoned random job directories older than the configured
+TTL. It does not publish a shared current event. Catalogue choices read the
+prebuilt JSON shipped below `samples/artifacts`; ROOT and EOS choices use
+temporary capability-scoped job directories.
 
 Useful runtime configuration:
 
@@ -85,14 +84,14 @@ TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14
 TRUTHVIZ_CATALOG=/opt/app-root/src/samples/catalog.json
 TRUTHVIZ_MAX_UPLOAD_MB=2048
 TRUTHVIZ_CMSRUN_TIMEOUT_SEC=3600
+TRUTHVIZ_JOB_TTL_SEC=86400
 CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh
 TRUTHVIZ_SKIP_CMSSW_INSTALL=1  # only when TRUTHVIZ_CMSSW_SRC/CMSSW_BASE is provided another way
 ```
 
-The old Python S2I flow can still serve prepared DOT/ROOT files, but it is not
-recommended for CMSSW processing because `cmssw-el9` requires
-Singularity/Apptainer, which is normally absent or blocked inside S2I Python
-runtime images.
+The result JSON is saved in the submitting browser's IndexedDB before the
+temporary server directory is acknowledged and deleted. Browser sessions are
+local to one origin and browser profile; they are not stored in the PVC.
 
 Expose the service if needed:
 

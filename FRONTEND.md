@@ -13,7 +13,9 @@ The frontend is a plain JavaScript app served from `app/index.html`. There is no
 - `app/js/dependency.js`: directed upstream/downstream/both link filtering.
 - `app/js/plot3d.js`: Plotly rechit display for selected nodes.
 - `app/js/export.js`: PNG and PDF export of the current Cytoscape viewport.
-- `app/js/upload.js`: server-mode DOT/ROOT upload modal and build-status polling.
+- `app/js/upload.js`: event launcher, isolated-job polling, catalogue selection,
+  and result acknowledgement.
+- `app/js/session-store.js`: versioned IndexedDB persistence and storage usage.
 
 ## Browser Dependencies
 
@@ -33,7 +35,9 @@ Because these are CDN-hosted, first load requires network access unless the libr
 `main.js` supports two modes:
 
 - Static mode: when opened with `file://`, it reads `window.EMBEDDED_BUNDLE_DATA` from `app/js/bundle.js`. If present, `window.EMBEDDED_RECHITS_DATA` from `app/js/rechits.js` is attached to the bundle.
-- Server mode: when opened through HTTP, it fetches `../data/bundle.json` and optionally `../data/rechits.json`.
+- Server mode: a bare URL shows the launcher. `?session=<id>` reads one complete
+  event from IndexedDB, while `?catalog=<id>` fetches immutable catalogue JSON.
+  Graph, rechits, and associations come from the same versioned envelope.
 
 Upload controls are enabled only in server mode.
 

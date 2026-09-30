@@ -12,7 +12,10 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 - Supports search, advanced attribute search, focus radius, upstream/downstream link filters, and multiple layouts.
 - Exports the current Cytoscape viewport as PNG or PDF.
 - Runs either as a static HTML page with embedded JSON or through the local Python server.
-- In server mode, accepts upload of a DOT graph and optional ROOT rechits file.
+- In server mode, stores each processed event in the submitting browser rather
+  than publishing a pod-wide current event.
+- Opens with saved browser sessions, persistent catalogue samples, CMSSW ROOT
+  upload/EOS input, and prepared DOT plus optional rechits choices.
 - In CMSSW-capable server mode, accepts a CMSSW EDM ROOT file and runs the
   TruthInfo dumper/conversion pipeline automatically.
 
@@ -37,20 +40,7 @@ chmod +x run.sh
 
 `run.sh` creates `venv/` if needed, installs Python dependencies, prepares or
 reuses a managed `CMSSW_20_1_0_pre3` project under `data/cmssw` when needed,
-builds `data/bundle.json` from the selected DOT file, generates
-`app/js/bundle.js` for static mode, and starts `server.py`.
-
-By default it looks for the first existing file from:
-
-1. `./truthgraph.dot`
-2. `../truthgraph.dot`
-3. `./dependency.gv`
-
-Use another DOT file with:
-
-```bash
-./run.sh --dot /path/to/truthgraph.dot
-```
+and starts the isolated-job server. Select input from the browser launcher.
 
 The server prints the selected application URL. By default it starts at:
 
@@ -103,6 +93,7 @@ CMSSWGraphViz/
 │       ├── dependency.js
 │       ├── plot3d.js
 │       ├── upload.js
+│       ├── session-store.js
 │       └── export.js
 ├── preprocess/
 │   ├── parse_graph.py
@@ -113,7 +104,9 @@ CMSSWGraphViz/
 │   ├── bundle.json
 │   └── rechits.json
 ├── samples/
-│   └── catalog.json
+│   ├── catalog.json
+│   └── artifacts/
+├── job_manager.py
 ├── server.py
 ├── truth_pipeline.py
 ├── visualizeTruthGraph

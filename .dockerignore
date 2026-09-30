@@ -9,6 +9,7 @@ data/rechits.json
 data/.bundle.source
 app/js/bundle.js
 app/js/rechits.js
+app/js/associations.js
 truthgraph.dot
 rechits.root
 *.log

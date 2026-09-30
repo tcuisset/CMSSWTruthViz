@@ -27,7 +27,9 @@ async function initApp() {
         // Show loading indicator
         showLoading(true);
 
-        // Load bundle data based on mode
+        // Static exports keep their embedded one-event behavior. Server mode starts
+        // from an explicit browser session or catalogue selection; a bare URL opens
+        // the launcher and never reads pod-wide data files.
         if (staticMode && window.EMBEDDED_BUNDLE_DATA) {
             // Static mode: Use embedded data
             console.log('Loading embedded bundle data...');
@@ -38,24 +40,18 @@ async function initApp() {
                 edges: window.bundleData.edges.length,
                 rechits: window.bundleData.rechits?.length || 0
             });
-        } else {
-            // Server mode: Fetch from server
-            console.log('Fetching bundle data from server...');
-            const response = await fetch('../data/bundle.json');
-            if (!response.ok) {
-                throw new Error(`Failed to load bundle.json: ${response.statusText}`);
+        } else if (!staticMode) {
+            await UploadManager.init();
+            const selection = await loadServerSelection();
+            if (!selection) {
+                showLoading(false);
+                await UploadManager.showLauncher(true);
+                return;
             }
-
-            window.bundleData = await response.json();
-            await attachServerRechitsData();
-            console.log('Bundle data loaded from server:', {
-                nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length,
-                rechits: window.bundleData.rechits?.length || 0
-            });
+            attachSessionEnvelope(selection);
         }
 
-        await attachAssociationData();
+        if (staticMode) await attachAssociationData();
 
         // Initialize graph
         GraphManager.init(window.bundleData);
@@ -71,7 +67,8 @@ async function initApp() {
 
         // Initialize upload only in server mode
         if (!staticMode) {
-            UploadManager.init();
+            const uploadBtn = document.getElementById('upload-btn');
+            if (uploadBtn) uploadBtn.textContent = 'Open event';
         } else {
             // Hide upload button in static mode
             const uploadBtn = document.getElementById('upload-btn');
@@ -98,7 +95,48 @@ async function initApp() {
         console.error('Error initializing application:', error);
         showLoading(false);
         alert(`Failed to initialize application: ${error.message}`);
+        if (!staticMode && UploadManager.modal) {
+            await UploadManager.showLauncher(true);
+        }
     }
+}
+
+async function loadServerSelection() {
+    const parameters = new URLSearchParams(window.location.search);
+    const sessionId = parameters.get('session');
+    const catalogId = parameters.get('catalog');
+    if (sessionId) {
+        const result = await SessionStore.get(sessionId);
+        if (!result) throw new Error('This browser session no longer exists');
+        return result;
+    }
+    if (catalogId) {
+        const response = await fetch(`../api/catalog/${encodeURIComponent(catalogId)}/result`);
+        const payload = await response.json();
+        if (!response.ok || payload.success === false) {
+            throw new Error(payload.error || `Catalogue loading failed with HTTP ${response.status}`);
+        }
+        return payload;
+    }
+    return null;
+}
+
+function attachSessionEnvelope(envelope) {
+    if (envelope.schemaVersion !== 1 || !envelope.bundle) {
+        throw new Error('Unsupported event-session format');
+    }
+    window.bundleData = envelope.bundle;
+    if (Array.isArray(envelope.rechits?.rechits)) {
+        window.bundleData.rechits = envelope.rechits.rechits;
+        window.bundleData.rechitsMetadata = envelope.rechits.metadata;
+    }
+    window.associationData = envelope.associations || null;
+    console.log('Session loaded:', {
+        name: envelope.session?.name,
+        nodes: window.bundleData.nodes.length,
+        edges: window.bundleData.edges.length,
+        rechits: window.bundleData.rechits?.length || 0
+    });
 }
 
 /**
@@ -111,27 +149,6 @@ function attachEmbeddedRechitsData() {
 
     window.bundleData.rechits = window.EMBEDDED_RECHITS_DATA.rechits;
     window.bundleData.rechitsMetadata = window.EMBEDDED_RECHITS_DATA.metadata;
-}
-
-/**
- * Attach optional server-mode rechits data from data/rechits.json.
- */
-async function attachServerRechitsData() {
-    try {
-        const response = await fetch('../data/rechits.json');
-        if (!response.ok) {
-            console.warn(`Rechits data not loaded: ${response.status} ${response.statusText}`);
-            return;
-        }
-
-        const rechitsData = await response.json();
-        if (Array.isArray(rechitsData.rechits)) {
-            window.bundleData.rechits = rechitsData.rechits;
-            window.bundleData.rechitsMetadata = rechitsData.metadata;
-        }
-    } catch (error) {
-        console.warn('Rechits data not loaded:', error);
-    }
 }
 
 /**

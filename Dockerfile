@@ -9,6 +9,7 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt \
     && mkdir -p data \
     && printf 'window.EMBEDDED_BUNDLE_DATA = null;\n' > app/js/bundle.js \
     && printf 'window.EMBEDDED_RECHITS_DATA = null;\n' > app/js/rechits.js \
+    && printf 'window.EMBEDDED_ASSOCIATION_DATA = null;\n' > app/js/associations.js \
     && chmod -R g=u /opt/app-root/src
 
 ENV PYTHON_BIN=python3 \
@@ -18,6 +19,7 @@ ENV PYTHON_BIN=python3 \
     CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh \
     TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_0_pre3 \
     TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14 \
+    TRUTHVIZ_JOB_TTL_SEC=86400 \
     TRUTHVIZ_CMSRUN_WRAPPER=
 
 EXPOSE 8080
