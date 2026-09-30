@@ -21,7 +21,7 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 
 ## Documentation Map
 
-- [INSTALL.md](INSTALL.md): local setup, Python virtual environment, CDN/browser requirements, static mode, server mode, and OpenShift deployment.
+- [INSTALL.md](INSTALL.md): local setup, Python and npm dependencies, static mode, server mode, and OpenShift deployment.
 - [FRONTEND.md](FRONTEND.md): web app structure, Cytoscape managers, UI controls, layouts, Plotly rechits panel, exports, and keyboard behavior.
 - [DATA_FORMAT.md](DATA_FORMAT.md): `bundle.json`, `bundle.js`, `rechits.json`, node and edge fields, and how DOT attributes are mapped.
 - [SERVER.md](SERVER.md): Python preprocessing scripts, local HTTP server, upload endpoints, background build status, ROOT rechits extraction, and startup behavior.
@@ -38,7 +38,8 @@ chmod +x run.sh
 ./run.sh
 ```
 
-`run.sh` creates `venv/` if needed, installs Python dependencies, prepares or
+`run.sh` generates `app/vendor/` from the pinned npm dependencies when needed,
+creates `venv/`, installs Python dependencies, prepares or
 reuses a managed `CMSSW_20_1_0_pre3` project under `data/cmssw` when needed,
 and starts the isolated-job server. Select input from the browser launcher.
 
@@ -81,6 +82,8 @@ File upload is hidden in static mode because uploads require the Python server.
 
 ```text
 CMSSWGraphViz/
+├── package.json
+├── package-lock.json
 ├── app/
 │   ├── index.html
 │   ├── css/style.css

@@ -1,8 +1,18 @@
+FROM node:24-bookworm-slim AS frontend-dependencies
+
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY scripts/build-vendor.mjs scripts/build-vendor.mjs
+RUN npm run vendor
+
 FROM cmssw/el9:x86_64
 
 WORKDIR /opt/app-root/src
 
 COPY . /opt/app-root/src
+COPY --from=frontend-dependencies /build/app/vendor /opt/app-root/src/app/vendor
 
 RUN python3 -m pip install --no-cache-dir -r requirements.txt \
     && chmod +x .s2i/bin/run .s2i/bin/assemble visualizeTruthGraph \

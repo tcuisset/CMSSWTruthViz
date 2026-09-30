@@ -1,10 +1,13 @@
 # Frontend And UI
 
-The frontend is a plain JavaScript app served from `app/index.html`. There is no npm build step in the current repository. Browser libraries are loaded from CDNs, and project code is loaded as ordered script tags.
+The frontend is a plain JavaScript app served from `app/index.html`. Browser
+libraries are pinned in `package-lock.json` and copied into the generated
+`app/vendor/` directory by `npm run vendor`. Project code is loaded as ordered
+script tags; there is no application bundler.
 
 ## Runtime Entry Points
 
-- `app/index.html`: page structure, controls, upload modal, CDN scripts, embedded data scripts, and app script order.
+- `app/index.html`: page structure, controls, upload modal, local dependency scripts, embedded data scripts, and app script order.
 - `app/js/main.js`: loads data, initializes all managers, updates graph statistics, and hides upload controls in static mode.
 - `app/js/graph.js`: Cytoscape lifecycle, stylesheet, layout registration, node/edge semantics, filters, selection, and viewport fitting.
 - `app/js/panel.js`: side panel, breadcrumbs, DOT attributes, neighbor lists, rendered DOT labels, and persisted panel width.
@@ -19,7 +22,7 @@ The frontend is a plain JavaScript app served from `app/index.html`. There is no
 
 ## Browser Dependencies
 
-`index.html` loads these libraries from CDNs:
+`index.html` loads these generated local libraries:
 
 - Cytoscape.js
 - dagre and `cytoscape-dagre`
@@ -28,7 +31,8 @@ The frontend is a plain JavaScript app served from `app/index.html`. There is no
 - jsPDF
 - Plotly.js
 
-Because these are CDN-hosted, first load requires network access unless the libraries are vendored locally.
+Run `npm ci && npm run vendor` after a fresh clone. Once generated, the viewer
+does not need network access at runtime.
 
 ## Data Loading
 

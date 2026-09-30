@@ -99,4 +99,6 @@ Expose the service if needed:
 oc expose service/cmsswgraphviz
 ```
 
-The browser still needs access to the CDN-hosted frontend libraries listed in [FRONTEND.md](FRONTEND.md), unless those assets are vendored into `app/index.html`.
+The container build installs the pinned npm packages in a Node.js build stage
+and copies the generated browser libraries into the final CMSSW image. The
+running browser does not need CDN access.

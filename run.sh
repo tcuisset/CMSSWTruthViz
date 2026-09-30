@@ -40,6 +40,22 @@ echo "Truth Graph Viewer"
 echo "============================================================"
 echo ""
 
+# Browser libraries are generated from the pinned npm dependencies and are not
+# stored in Git. Keep an existing installation offline-friendly, but bootstrap
+# it automatically after a fresh clone.
+if [ ! -f "app/vendor/plotly-2.35.2.min.js" ]; then
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "Error: frontend dependencies are missing and npm was not found."
+        echo "Install Node.js 20 or newer, then run 'npm ci && npm run vendor'."
+        exit 1
+    fi
+    echo "Installing frontend dependencies..."
+    npm ci --ignore-scripts --no-audit --no-fund
+    npm run vendor
+    echo "✓ Frontend dependencies installed"
+    echo ""
+fi
+
 # The app needs Python 3.9 or newer. The system python3 can be older.
 PYTHON_CANDIDATES="python3 python3.14 python3.13 python3.12 python3.11 python3.10 python3.9"
 

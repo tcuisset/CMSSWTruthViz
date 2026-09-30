@@ -1,13 +1,16 @@
 # Installation And Deployment
 
-This repository is a Python-assisted static web app. The frontend has no npm build step in the current codebase; JavaScript libraries are loaded from CDNs by `app/index.html`.
+This repository is a Python-assisted static web app. Browser libraries are
+installed as pinned npm dependencies and copied into the generated
+`app/vendor/` directory. The application itself remains plain JavaScript and
+does not require a bundler.
 
 ## Requirements
 
 - Python 3.9 or newer. Verified on 3.12 and on 3.13.
 - Python `venv` support. On Debian and Ubuntu this is the `python3-venv` package.
+- Node.js 20 or newer with npm, required once after a fresh clone.
 - A modern browser such as Chrome or Firefox.
-- Network access from the browser for CDN libraries unless those scripts are vendored locally.
 - A Graphviz DOT truth graph, usually `truthgraph.dot`.
 - Optional: a ROOT rechits file readable by `uproot`.
 
@@ -67,16 +70,19 @@ Use a specific DOT file:
 
 `run.sh` performs the local setup and launch:
 
-1. Creates `venv/` if it does not exist.
-2. Installs Python dependencies from `preprocess/requirements.txt` if needed.
-3. Reuses or creates the configured CMSSW release under `data/cmssw` when no
+1. Runs `npm ci` and generates `app/vendor/` if the browser dependencies are absent.
+2. Creates `venv/` if it does not exist.
+3. Installs Python dependencies from `preprocess/requirements.txt` if needed.
+4. Reuses or creates the configured CMSSW release under `data/cmssw` when no
    `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
-4. Starts `server.py` with one isolated-job worker.
+5. Starts `server.py` with one isolated-job worker.
 
 ## Manual Setup
 
 ```bash
 cd CMSSWGraphViz
+npm ci
+npm run vendor
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -182,9 +188,10 @@ shared event.
 
 Choose **Prepared input** in the opening launcher and upload the DOT file there.
 
-### Browser shows CDN errors
+### Browser libraries are missing
 
-The current frontend loads Cytoscape, layout plugins, jsPDF, and Plotly from CDNs. Ensure the browser can reach those CDNs or vendor the libraries and update `app/index.html`.
+Run `npm ci && npm run vendor`. The generated `app/vendor/` directory is ignored
+by Git and can be regenerated entirely from `package-lock.json`.
 
 ### ROOT upload fails
 

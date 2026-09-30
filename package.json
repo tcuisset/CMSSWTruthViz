@@ -1,0 +1,25 @@
+{
+  "name": "cmssw-truth-graph-viz",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vendor": "node scripts/build-vendor.mjs"
+  },
+  "dependencies": {
+    "cose-base": "2.2.0",
+    "cytoscape": "3.28.1",
+    "cytoscape-dagre": "2.5.0",
+    "cytoscape-elk": "2.2.0",
+    "cytoscape-fcose": "2.2.0",
+    "dagre": "0.8.5",
+    "elkjs": "0.9.3",
+    "jspdf": "2.5.1",
+    "layout-base": "2.0.1",
+    "plotly.js-dist-min": "2.35.2"
+  },
+  "devDependencies": {
+    "terser": "5.37.0"
+  }
+}

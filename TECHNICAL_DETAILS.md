@@ -34,7 +34,9 @@ ROOT file
 
 ## Frontend Shape
 
-The frontend is plain JavaScript. There is no current npm package, bundler, or framework. `app/index.html` loads CDN libraries, embedded data scripts, then local app scripts.
+The frontend is plain JavaScript without a framework or application bundler.
+Pinned npm packages generate the ignored `app/vendor/` directory;
+`app/index.html` loads those libraries, embedded data scripts, then local app scripts.
 
 Main global managers:
 
@@ -99,5 +101,6 @@ The upload workflow regenerates both JSON and static JS wrappers so the newly up
 - Preserve copied DOT attributes unless there is a strong reason to drop them.
 - Prefer adding parser support for explicit attributes over parsing display text in the browser.
 - Keep `DATA_FORMAT.md` updated when adding fields consumed by UI code.
-- Keep `INSTALL.md` updated if frontend dependencies move from CDN scripts to npm or vendored assets.
+- Keep `package.json`, the vendor-generation script, and `INSTALL.md` aligned
+  when frontend dependencies change.
 - Check static mode after data-pipeline changes because it exercises the embedded JS wrappers.
