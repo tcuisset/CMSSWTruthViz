@@ -12,11 +12,9 @@ default_permissions = "container-dev"
 # Workspace files may be modified.
 [permissions.container-dev.filesystem]
 ":workspace_roots" = "write"
-
-# Optional additional directories outside the repo.
-# I would leave these absent unless you actually need them.
-#
-# "~/.cache/some-build-tool" = "write"
+":minimal" = "read"
+":tmpdir" = "write"
+":slash_tmp" = "write"
 
 
 [permissions.container-dev.network]
@@ -26,6 +24,7 @@ enabled = true
 allow_local_binding = true
 
 
+# only applied if network_proxy is enabled (off by default)
 [permissions.container-dev.network.domains]
 
 # Host services / your web app
@@ -37,9 +36,8 @@ allow_local_binding = true
 "**.github.com" = "allow"
 
 # Add only the registries your project actually uses.
-"registry-1.docker.io" = "allow"
-"auth.docker.io" = "allow"
-"production.cloudflare.docker.com" = "allow"
+# "registry-1.docker.io" = "allow"
+"*.cern.ch" = "allow"
 
 # Examples if applicable:
 # "pypi.org" = "allow"
