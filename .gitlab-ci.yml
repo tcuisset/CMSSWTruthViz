@@ -1,0 +1,34 @@
+variables:
+  PROJECT: cmssw-truth-graph-viz
+  SERVER: https://api.paas.okd.cern.ch
+  DEPLOY_TOKEN: ""
+
+stages:
+  - deploy
+  - promote
+
+deploy_dev:
+  stage: deploy
+  image: gitlab-registry.cern.ch/paas-tools/openshift-client
+  script:
+    - oc login --token="${DEPLOY_TOKEN}" "${SERVER}"
+    - oc project "${PROJECT}"
+
+    # Start a new build of the existing BuildConfig.
+    - oc start-build cmssw-truth-viz --follow --wait
+
+    # If your dev Deployment watches the :dev ImageStreamTag,
+    # OpenShift should roll it out automatically.
+    # Otherwise explicitly restart / update it here.
+  when: manual
+
+promote_stable:
+  stage: promote
+  image: gitlab-registry.cern.ch/paas-tools/openshift-client
+  script:
+    - oc login --token="${DEPLOY_TOKEN}" "${SERVER}"
+    - oc project "${PROJECT}"
+
+    # Promote the exact current dev image to stable.
+    - oc tag cmssw-truth-viz:dev cmssw-truth-viz:stable
+  when: manual
