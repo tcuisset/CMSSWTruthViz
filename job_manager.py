@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 
 TERMINAL_STATES = {"success", "error"}
+MAX_LOG_CHARS = 200_000
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Job:
     started_at: float | None = None
     finished_at: float | None = None
     result_path: Path | None = None
+    logs: str = ""
 
 
 class JobManager:
@@ -119,6 +121,19 @@ class JobManager:
                     raise AttributeError(key)
                 setattr(job, key, value)
 
+    def append_log(self, capability: str, text: str) -> None:
+        """Add processor output while bounding the status response size."""
+        if not text:
+            return
+        with self._lock:
+            job = self._require(capability)
+            combined = f"{job.logs}{text}"
+            if len(combined) > MAX_LOG_CHARS:
+                omitted = len(combined) - MAX_LOG_CHARS
+                marker = f"[Earlier log output omitted ({omitted} characters).]\n"
+                combined = marker + combined[-(MAX_LOG_CHARS - len(marker)):]
+            job.logs = combined
+
     def cleanup_expired(self, now: float | None = None) -> None:
         now = time.time() if now is None else now
         expired: list[Job] = []
@@ -176,6 +191,9 @@ class JobManager:
                 job.started_at = time.time()
 
             def update(**updates: Any) -> None:
+                log = updates.pop("log", None)
+                if log is not None:
+                    self.append_log(capability, str(log))
                 updates.setdefault("state", "running")
                 self.update(capability, **updates)
 
@@ -227,4 +245,5 @@ class JobManager:
             "createdAt": job.created_at,
             "startedAt": job.started_at,
             "finishedAt": job.finished_at,
+            "logs": job.logs,
         }

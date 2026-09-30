@@ -1,7 +1,9 @@
+import io
 import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,6 +12,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import truth_pipeline
 from truth_pipeline import PipelineOptions
+
+
+class FakeProcess:
+    def __init__(self, *, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = io.StringIO(stdout)
+        self.stderr = io.StringIO(stderr)
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        self.returncode = -9
 
 
 class TruthPipelineTests(unittest.TestCase):
@@ -103,8 +118,8 @@ class TruthPipelineTests(unittest.TestCase):
             self.assertEqual(loaded["samples"][0]["id"], "zmm")
 
     @mock.patch("truth_pipeline.run_checked")
-    @mock.patch("truth_pipeline.subprocess.run")
-    def test_process_cmssw_root_discovers_outputs_and_runs_converters(self, mock_run, mock_run_checked):
+    @mock.patch("truth_pipeline.subprocess.Popen")
+    def test_process_cmssw_root_discovers_outputs_and_runs_converters(self, mock_popen, mock_run_checked):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cmssw_src = root / "CMSSW" / "src"
@@ -115,18 +130,15 @@ class TruthPipelineTests(unittest.TestCase):
             input_root.write_text("root", encoding="utf-8")
             job_root = root / "jobs"
 
-            def fake_run(args, **kwargs):
+            def fake_popen(args, **kwargs):
                 outdir = job_root / "job1" / "cmssw"
                 outdir.mkdir(parents=True, exist_ok=True)
                 (outdir / "truthlogicalgraph_run1_lumi1_event8.dot").write_text("digraph {}", encoding="utf-8")
                 (outdir / "rechits_nano.root").write_text("root", encoding="utf-8")
-                completed = mock.Mock()
-                completed.returncode = 0
-                completed.stdout = ""
-                completed.stderr = ""
-                return completed
+                return FakeProcess(stdout="cmsRun stdout\n", stderr="cmsRun stderr\n")
 
-            mock_run.side_effect = fake_run
+            mock_popen.side_effect = fake_popen
+            updates = []
 
             result = truth_pipeline.process_cmssw_root(
                 input_root,
@@ -137,6 +149,7 @@ class TruthPipelineTests(unittest.TestCase):
                     cmssw_src=cmssw_src,
                     copy_to_viewer=False,
                 ),
+                status_callback=lambda **values: updates.append(values),
             )
 
             self.assertEqual(result.dot_path.name, "truthlogicalgraph_run1_lumi1_event8.dot")
@@ -145,6 +158,62 @@ class TruthPipelineTests(unittest.TestCase):
             rechits_command = mock_run_checked.call_args_list[1].args[0]
             event_index_flag = rechits_command.index("--event-index")
             self.assertEqual(rechits_command[event_index_flag + 1], "0")
+            cmsrun_logs = [value["log"] for value in updates if "log" in value]
+            self.assertIn("===== cmsRun =====", cmsrun_logs[0])
+            self.assertIn("cmsRun stdout", "".join(cmsrun_logs))
+            self.assertIn("cmsRun stderr", "".join(cmsrun_logs))
+
+    @mock.patch("truth_pipeline.subprocess.Popen")
+    def test_converter_output_is_reported_to_status_callback(self, mock_popen):
+        mock_popen.return_value = FakeProcess(
+            stdout="converter stdout\n",
+            stderr="converter stderr\n",
+        )
+        logs = []
+
+        truth_pipeline.run_checked(
+            ["python3", "converter.py"],
+            cwd=Path("/tmp"),
+            timeout=30,
+            phase="Python: converter.py",
+            status_callback=lambda **updates: logs.append(updates["log"]),
+        )
+
+        self.assertIn("===== Python: converter.py =====", logs[0])
+        self.assertIn("[stdout] converter stdout", "".join(logs))
+        self.assertIn("[stderr] converter stderr", "".join(logs))
+
+    def test_process_output_is_forwarded_before_process_finishes(self):
+        first_line_seen = threading.Event()
+        process_finished = threading.Event()
+        result_holder = []
+
+        def callback(**updates):
+            if "[stdout] first line" in updates.get("log", ""):
+                first_line_seen.set()
+
+        def run_process():
+            result_holder.append(truth_pipeline.run_process_with_live_output(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import time; print('first line', flush=True); time.sleep(0.75); print('second line', flush=True)",
+                ],
+                cwd=Path.cwd(),
+                timeout=5,
+                phase="Python: streaming test",
+                status_callback=callback,
+            ))
+            process_finished.set()
+
+        worker = threading.Thread(target=run_process)
+        worker.start()
+        self.assertTrue(first_line_seen.wait(2))
+        self.assertFalse(process_finished.is_set())
+        worker.join(5)
+        self.assertTrue(process_finished.is_set())
+        self.assertEqual(result_holder[0].returncode, 0)
 
 
 if __name__ == "__main__":

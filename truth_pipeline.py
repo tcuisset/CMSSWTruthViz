@@ -14,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -198,8 +199,85 @@ def update_status(callback: Callable[..., None] | None, **updates) -> None:
         callback(**updates)
 
 
-def run_checked(args, *, cwd: Path, timeout: int | None, phase: str) -> subprocess.CompletedProcess:
-    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+def run_process_with_live_output(
+    args,
+    *,
+    cwd: Path,
+    timeout: int | None,
+    phase: str,
+    status_callback: Callable[..., None] | None = None,
+) -> subprocess.CompletedProcess:
+    """Run a process while forwarding each stdout/stderr line to the job."""
+    command = shlex.join(str(arg) for arg in args)
+    update_status(status_callback, log=f"===== {phase} =====\n$ {command}\n")
+    output = {"stdout": [], "stderr": []}
+    try:
+        process = subprocess.Popen(
+            args,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        )
+    except OSError as exc:
+        update_status(status_callback, log=f"[failed to start: {exc}]\n")
+        raise
+
+    def forward(stream_name: str, stream) -> None:
+        try:
+            for line in iter(stream.readline, ""):
+                output[stream_name].append(line)
+                update_status(status_callback, log=f"[{stream_name}] {line}")
+        finally:
+            stream.close()
+
+    readers = [
+        threading.Thread(target=forward, args=(name, getattr(process, name)), daemon=True)
+        for name in ("stdout", "stderr")
+    ]
+    for reader in readers:
+        reader.start()
+
+    timed_out = False
+    try:
+        returncode = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        process.kill()
+        returncode = process.wait()
+    for reader in readers:
+        reader.join()
+
+    result = subprocess.CompletedProcess(
+        args,
+        returncode,
+        stdout="".join(output["stdout"]),
+        stderr="".join(output["stderr"]),
+    )
+    update_status(status_callback, log=f"[process exited with code {returncode}]\n")
+    if timed_out:
+        raise PipelineError(f"{phase} timed out after {timeout} seconds")
+    return result
+
+
+def run_checked(
+    args,
+    *,
+    cwd: Path,
+    timeout: int | None,
+    phase: str,
+    status_callback: Callable[..., None] | None = None,
+) -> subprocess.CompletedProcess:
+    result = run_process_with_live_output(
+        args,
+        cwd=cwd,
+        timeout=timeout,
+        phase=phase,
+        status_callback=status_callback,
+    )
     if result.returncode != 0:
         output = "\n".join(part for part in [result.stdout, result.stderr] if part).strip()
         raise PipelineError(f"{phase} failed with exit code {result.returncode}: {output or 'no output'}")
@@ -253,14 +331,15 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
     )
     command = cmsrun_command(cmssw_src, wrapper_cfg_path)
     wrapper = options.cmsrun_wrapper or os.environ.get("TRUTHVIZ_CMSRUN_WRAPPER")
+    cmsrun_args = cmsrun_subprocess_args(command, wrapper)
 
     update_status(status_callback, phase="cmsrun", message=f"Running cmsRun for event {options.event_index}...")
-    result = subprocess.run(
-        cmsrun_subprocess_args(command, wrapper),
+    result = run_process_with_live_output(
+        cmsrun_args,
         cwd=cmssw_src,
-        capture_output=True,
-        text=True,
         timeout=timeout,
+        phase="cmsRun",
+        status_callback=status_callback,
     )
     (job_dir / "cmsrun.stdout.log").write_text(result.stdout or "", encoding="utf-8")
     (job_dir / "cmsrun.stderr.log").write_text(result.stderr or "", encoding="utf-8")
@@ -283,6 +362,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         cwd=PROJECT_ROOT,
         timeout=1800,
         phase="Bundle generation",
+        status_callback=status_callback,
     )
 
     update_status(status_callback, phase="rechits", message="Building rechits JSON...")
@@ -299,6 +379,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         cwd=PROJECT_ROOT,
         timeout=1800,
         phase="Rechits generation",
+        status_callback=status_callback,
     )
 
     viewer_bundle_path = None
@@ -326,6 +407,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
             cwd=PROJECT_ROOT,
             timeout=1800,
             phase="Static bundle JS generation",
+            status_callback=status_callback,
         )
         run_checked(
             [
@@ -341,6 +423,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
             cwd=PROJECT_ROOT,
             timeout=1800,
             phase="Static rechits JS generation",
+            status_callback=status_callback,
         )
 
     return PipelineResult(

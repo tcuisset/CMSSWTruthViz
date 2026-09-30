@@ -36,6 +36,25 @@ class ServerPathTests(unittest.TestCase):
 
 
 class ServerSessionTests(unittest.TestCase):
+    @mock.patch("server.run_process_with_live_output")
+    def test_python_converter_status_callback_is_forwarded(self, mock_run):
+        def fake_run(*args, **kwargs):
+            kwargs["status_callback"](log="[stdout] bundle created\n[stderr] warning\n")
+            return SimpleNamespace(returncode=0, stdout="bundle created\n", stderr="warning\n")
+
+        mock_run.side_effect = fake_run
+        logs = []
+
+        server.run_checked(
+            [sys.executable, "build_bundle.py"],
+            status_callback=lambda **updates: logs.append(updates["log"]),
+            phase="Python: build_bundle.py",
+        )
+
+        self.assertIn("bundle created", logs[0])
+        self.assertIn("warning", logs[0])
+        self.assertEqual(mock_run.call_args.kwargs["phase"], "Python: build_bundle.py")
+
     def test_catalogue_result_reads_prebuilt_json_without_processing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -117,12 +136,19 @@ class ServerSessionTests(unittest.TestCase):
                 bundle_path=bundle, rechits_json_path=rechits, cmssw_outdir=cmssw,
             )
 
-            with mock.patch("server.process_cmssw_root", return_value=pipeline_result) as process:
-                server.process_job(job, lambda **updates: None)
+            updates = []
+
+            def fake_process(*args, status_callback):
+                status_callback(phase="cmsrun", message="Running cmsRun...", log="cmsRun output\n")
+                return pipeline_result
+
+            with mock.patch("server.process_cmssw_root", side_effect=fake_process) as process:
+                server.process_job(job, lambda **values: updates.append(values))
 
             options = process.call_args.args[1]
             self.assertFalse(options.copy_to_viewer)
             self.assertEqual(options.event_index, 7)
+            self.assertEqual(updates[0]["log"], "cmsRun output\n")
 
 
 if __name__ == "__main__":

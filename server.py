@@ -10,7 +10,6 @@ import json
 import os
 import shutil
 import socketserver
-import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -27,6 +26,7 @@ from truth_pipeline import (
     parse_dumper_args,
     parse_non_negative_int,
     process_cmssw_root,
+    run_process_with_live_output,
 )
 
 
@@ -102,9 +102,13 @@ def write_result(job: Job, bundle_path: Path, rechits_path: Path | None, associa
     return result_path
 
 
-def run_checked(args, *, timeout=1800):
-    result = subprocess.run(
-        args, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=timeout
+def run_checked(args, *, timeout=1800, status_callback=None, phase="Python converter"):
+    result = run_process_with_live_output(
+        args,
+        cwd=PROJECT_ROOT,
+        timeout=timeout,
+        phase=phase,
+        status_callback=status_callback,
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr or result.stdout or "converter failed")
@@ -122,10 +126,12 @@ def process_job(job: Job, update) -> Path:
         )
 
         def pipeline_update(**updates):
-            update(
-                phase=updates.get("phase", "running"),
-                message=updates.get("message", "Processing ROOT input..."),
-            )
+            forwarded = {
+                key: updates[key]
+                for key in ("phase", "message", "log")
+                if key in updates
+            }
+            update(**forwarded)
 
         result = process_cmssw_root(
             Path(job.payload["inputRoot"]), options, status_callback=pipeline_update
@@ -147,7 +153,7 @@ def process_job(job: Job, update) -> Path:
             job.payload["dotPath"],
             str(bundle_path),
             "--no-js-output",
-        ])
+        ], status_callback=update, phase="Python: build_bundle.py")
         rechits_path = None
         if job.payload.get("rootPath"):
             rechits_path = job.job_dir / "rechits.json"
@@ -160,7 +166,7 @@ def process_job(job: Job, update) -> Path:
                 "--event-index",
                 str(job.metadata["eventIndex"]),
                 "--no-js-output",
-            ])
+            ], status_callback=update, phase="Python: build_rechits_json.py")
         update(phase="packaging", message="Packaging data for the browser...")
         return write_result(job, bundle_path, rechits_path)
 

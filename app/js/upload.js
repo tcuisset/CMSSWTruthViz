@@ -18,6 +18,7 @@ const UploadManager = {
         this.cancelBtn = document.getElementById('upload-cancel-btn');
         this.status = document.getElementById('upload-status');
         this.progress = document.getElementById('upload-progress');
+        this.logBox = document.getElementById('upload-log');
         this.sessionName = document.getElementById('session-name-input');
         this.rootFile = document.getElementById('cmssw-root-file-input');
         this.rootPath = document.getElementById('cmssw-root-path-input');
@@ -141,6 +142,7 @@ const UploadManager = {
             }
             const formData = mode === 'cmssw' ? this.rootFormData() : this.preparedFormData();
             this.setBusy(true, 'Uploading input...');
+            this.setLogs('');
             const endpoint = mode === 'cmssw' ? 'root' : 'prepared';
             const response = await fetch(`${this.apiBase}/jobs/${endpoint}`, {method: 'POST', body: formData});
             const payload = await this.parseResponse(response, 'Job submission');
@@ -181,12 +183,11 @@ const UploadManager = {
     async waitForJob(id) {
         const deadline = Date.now() + 60 * 60 * 1000;
         while (Date.now() < deadline) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 500));
             const response = await fetch(`${this.apiBase}/jobs/${encodeURIComponent(id)}/status`);
             const payload = await this.parseResponse(response, 'Job status');
             const job = payload.job;
-            const queue = job.queuePosition ? ` (queue position ${job.queuePosition})` : '';
-            this.status.textContent = `${job.message || job.phase}${queue}`;
+            this.updateJobDisplay(job);
             if (job.state === 'success') return;
             if (job.state === 'error') throw new Error(job.message || 'Processing failed');
         }
@@ -301,6 +302,19 @@ const UploadManager = {
         this.submitBtn.disabled = busy;
         this.status.textContent = message;
         if (!busy) this.submitBtn.disabled = false;
+    },
+
+    updateJobDisplay(job) {
+        const queue = job.queuePosition ? ` (queue position ${job.queuePosition})` : '';
+        this.status.textContent = `${job.message || job.phase}${queue}`;
+        this.setLogs(job.logs || '');
+    },
+
+    setLogs(logs) {
+        if (!this.logBox) return;
+        const wasNearBottom = this.logBox.scrollHeight - this.logBox.scrollTop - this.logBox.clientHeight < 24;
+        this.logBox.value = logs;
+        if (wasNearBottom) this.logBox.scrollTop = this.logBox.scrollHeight;
     },
 
     nonNegativeInteger(value, label) {

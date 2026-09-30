@@ -9,6 +9,27 @@ from job_manager import JobManager
 
 
 class JobManagerTests(unittest.TestCase):
+    def test_processor_logs_are_available_in_job_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            def processor(job, update):
+                update(log="===== cmsRun =====\n[stdout]\nprocessing event\n")
+                result = job.job_dir / "result.json"
+                result.write_text("{}", encoding="utf-8")
+                return result
+
+            manager = JobManager(Path(tmp), processor)
+            try:
+                job = manager.reserve("root")
+                manager.enqueue(job.capability)
+                deadline = time.time() + 2
+                while time.time() < deadline and manager.status(job.capability)["state"] != "success":
+                    time.sleep(0.01)
+                status = manager.status(job.capability)
+                self.assertIn("===== cmsRun =====", status["logs"])
+                self.assertIn("processing event", status["logs"])
+            finally:
+                manager.shutdown()
+
     def test_jobs_are_isolated_fifo_and_acknowledged_independently(self):
         with tempfile.TemporaryDirectory() as tmp:
             first_started = threading.Event()
