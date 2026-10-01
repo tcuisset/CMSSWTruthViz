@@ -109,6 +109,8 @@ set -u
     set -u
 
     if [ -n "$topic" ]; then
+        # upstream-only does not configure user repository & remotes: suitable for deployment
+        git cms-init --upstream-only --yes
         git cms-rebase-topic "$topic"
         scram b -j "$jobs"
     fi
