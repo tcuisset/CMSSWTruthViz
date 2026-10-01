@@ -16,12 +16,15 @@ COPY --from=frontend-dependencies /build/app/vendor /opt/app-root/src/app/vendor
 
 RUN python3 -m venv venv \
     && venv/bin/python -m pip install --no-cache-dir -r requirements.txt \
-    && chmod +x run.sh visualizeTruthGraph \
+    && chmod +x run.sh visualizeTruthGraph scripts/*.sh \
     && mkdir -p data \
     && printf 'window.EMBEDDED_BUNDLE_DATA = null;\n' > app/js/bundle.js \
     && printf 'window.EMBEDDED_RECHITS_DATA = null;\n' > app/js/rechits.js \
     && printf 'window.EMBEDDED_ASSOCIATION_DATA = null;\n' > app/js/associations.js \
     && chmod -R g=u /opt/app-root/src
+
+ARG TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_0_pre3
+ARG TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14
 
 ENV TRUTHVIZ_PYTHON=python3 \
     TRUTHVIZ_SERVER_HOST=0.0.0.0 \
@@ -30,11 +33,11 @@ ENV TRUTHVIZ_PYTHON=python3 \
     VO_CMS_SW_DIR=/cvmfs/cms.cern.ch \
     CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh \
     SITECONFIG_PATH=/cvmfs/cms.cern.ch/SITECONF/T2_CH_CERN/ \
-    TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_0_pre3 \
-    TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14 \
+    TRUTHVIZ_CMSSW_RELEASE=${TRUTHVIZ_CMSSW_RELEASE} \
+    TRUTHVIZ_SCRAM_ARCH=${TRUTHVIZ_SCRAM_ARCH} \
     TRUTHVIZ_JOB_TTL_SEC=86400 \
     TRUTHVIZ_CMSRUN_WRAPPER=
 
 EXPOSE 8080
 
-CMD ["/opt/app-root/src/run.sh"]
+CMD ["/opt/app-root/src/scripts/run-production.sh"]
