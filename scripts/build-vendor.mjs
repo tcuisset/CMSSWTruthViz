@@ -53,6 +53,6 @@ for (const [file, variable] of [
     await writeFile(path.join(projectRoot, "app", "js", file),
       `window.${variable} = null;\n`, { flag: "wx" });
   } catch (error) {
-    if (error.code !== "EEXIST") throw error;
+    if (error.code !== "EEXIST" && error.code !== "ENOENT") throw error;
   }
 }
