@@ -42,6 +42,7 @@ class PipelineOptions:
     cmssw_src: Path | None = None
     cmsrun_timeout: int | None = None
     cmsrun_wrapper: str | None = None
+    debug_dir: Path | None = None
     copy_to_viewer: bool = True
 
 
@@ -56,6 +57,7 @@ class PipelineResult:
     rechits_json_path: Path
     viewer_bundle_path: Path | None
     viewer_rechits_path: Path | None
+    debug_dir: Path | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -68,6 +70,7 @@ class PipelineResult:
             "rechitsJsonPath": str(self.rechits_json_path),
             "viewerBundlePath": str(self.viewer_bundle_path) if self.viewer_bundle_path else None,
             "viewerRechitsPath": str(self.viewer_rechits_path) if self.viewer_rechits_path else None,
+            "debugDir": str(self.debug_dir) if self.debug_dir else None,
         }
 
 
@@ -206,9 +209,26 @@ def run_process_with_live_output(
     timeout: int | None,
     phase: str,
     status_callback: Callable[..., None] | None = None,
+    log_path: Path | None = None,
 ) -> subprocess.CompletedProcess:
     """Run a process while forwarding each stdout/stderr line to the job."""
     command = shlex.join(str(arg) for arg in args)
+    log_file = None
+    log_lock = threading.Lock()
+
+    if log_path is not None:
+        log_path = Path(log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("a", encoding="utf-8")
+
+    def record_log(text: str) -> None:
+        if log_file is None:
+            return
+        with log_lock:
+            log_file.write(text)
+            log_file.flush()
+
+    record_log(f"===== {phase} =====\n$ {command}\n")
     update_status(status_callback, log=f"===== {phase} =====\n$ {command}\n")
     output = {"stdout": [], "stderr": []}
     try:
@@ -223,13 +243,17 @@ def run_process_with_live_output(
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
     except OSError as exc:
+        record_log(f"[failed to start: {exc}]\n")
         update_status(status_callback, log=f"[failed to start: {exc}]\n")
+        if log_file is not None:
+            log_file.close()
         raise
 
     def forward(stream_name: str, stream) -> None:
         try:
             for line in iter(stream.readline, ""):
                 output[stream_name].append(line)
+                record_log(f"[{stream_name}] {line}")
                 update_status(status_callback, log=f"[{stream_name}] {line}")
         finally:
             stream.close()
@@ -257,10 +281,15 @@ def run_process_with_live_output(
         stdout="".join(output["stdout"]),
         stderr="".join(output["stderr"]),
     )
+    record_log(f"[process exited with code {returncode}]\n")
     update_status(status_callback, log=f"[process exited with code {returncode}]\n")
-    if timed_out:
-        raise PipelineError(f"{phase} timed out after {timeout} seconds")
-    return result
+    try:
+        if timed_out:
+            raise PipelineError(f"{phase} timed out after {timeout} seconds")
+        return result
+    finally:
+        if log_file is not None:
+            log_file.close()
 
 
 def run_checked(
@@ -270,6 +299,7 @@ def run_checked(
     timeout: int | None,
     phase: str,
     status_callback: Callable[..., None] | None = None,
+    log_path: Path | None = None,
 ) -> subprocess.CompletedProcess:
     result = run_process_with_live_output(
         args,
@@ -277,6 +307,7 @@ def run_checked(
         timeout=timeout,
         phase=phase,
         status_callback=status_callback,
+        log_path=log_path,
     )
     if result.returncode != 0:
         output = "\n".join(part for part in [result.stdout, result.stderr] if part).strip()
@@ -317,6 +348,18 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
     job_dir.mkdir(parents=True, exist_ok=True)
     cmssw_outdir.mkdir(parents=True, exist_ok=True)
 
+    debug_root = options.debug_dir
+    if debug_root is None:
+        debug_root = os.environ.get("TRUTHVIZ_DEBUG_DIR")
+    debug_dir = None
+    if debug_root:
+        debug_dir = Path(debug_root).expanduser().resolve() / job_id
+        try:
+            debug_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise PipelineError(f"Could not create debug directory {debug_dir}: {exc}") from exc
+    pipeline_log_path = debug_dir / "pipeline.log" if debug_dir else None
+
     timeout = options.cmsrun_timeout
     if timeout is None:
         timeout = int(os.environ.get("TRUTHVIZ_CMSRUN_TIMEOUT_SEC", "3600"))
@@ -329,6 +372,8 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         cmssw_outdir,
         options,
     )
+    if debug_dir is not None and debug_dir != job_dir:
+        shutil.copyfile(wrapper_cfg_path, debug_dir / wrapper_cfg_path.name)
     command = cmsrun_command(cmssw_src, wrapper_cfg_path)
     wrapper = options.cmsrun_wrapper or os.environ.get("TRUTHVIZ_CMSRUN_WRAPPER")
     cmsrun_args = cmsrun_subprocess_args(command, wrapper)
@@ -340,9 +385,13 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         timeout=timeout,
         phase="cmsRun",
         status_callback=status_callback,
+        log_path=pipeline_log_path,
     )
     (job_dir / "cmsrun.stdout.log").write_text(result.stdout or "", encoding="utf-8")
     (job_dir / "cmsrun.stderr.log").write_text(result.stderr or "", encoding="utf-8")
+    if debug_dir is not None and debug_dir != job_dir:
+        (debug_dir / "cmsrun.stdout.log").write_text(result.stdout or "", encoding="utf-8")
+        (debug_dir / "cmsrun.stderr.log").write_text(result.stderr or "", encoding="utf-8")
     if result.returncode != 0:
         output = "\n".join(part for part in [result.stdout, result.stderr] if part).strip()
         raise PipelineError(f"cmsRun failed with exit code {result.returncode}: {output or 'no output'}")
@@ -363,6 +412,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         timeout=1800,
         phase="Bundle generation",
         status_callback=status_callback,
+        log_path=pipeline_log_path,
     )
 
     update_status(status_callback, phase="rechits", message="Building rechits JSON...")
@@ -380,6 +430,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         timeout=1800,
         phase="Rechits generation",
         status_callback=status_callback,
+        log_path=pipeline_log_path,
     )
 
     viewer_bundle_path = None
@@ -408,6 +459,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
             timeout=1800,
             phase="Static bundle JS generation",
             status_callback=status_callback,
+            log_path=pipeline_log_path,
         )
         run_checked(
             [
@@ -424,6 +476,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
             timeout=1800,
             phase="Static rechits JS generation",
             status_callback=status_callback,
+            log_path=pipeline_log_path,
         )
 
     return PipelineResult(
@@ -436,6 +489,7 @@ def process_cmssw_root(input_root: Path, options: PipelineOptions | None = None,
         rechits_json_path=rechits_json_path,
         viewer_bundle_path=viewer_bundle_path,
         viewer_rechits_path=viewer_rechits_path,
+        debug_dir=debug_dir,
     )
 
 

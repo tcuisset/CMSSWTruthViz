@@ -56,6 +56,10 @@ To generate viewer inputs directly from a CMSSW EDM ROOT file:
 ./visualizeTruthGraph myInputFile.root --event-index 0
 ```
 
+For a failed or suspicious run, preserve the generated `cmsRun` wrapper and
+pipeline logs with `--save-debug /path/to/debug`; artifacts are written below
+that directory using the run's job ID.
+
 This requires a CMSSW runtime with the TruthInfo plugins available. The script
 uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, the managed
 `data/cmssw/CMSSW_20_1_0_pre3/src` project, or the sibling

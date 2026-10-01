@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -154,6 +155,7 @@ class TruthPipelineTests(unittest.TestCase):
 
             self.assertEqual(result.dot_path.name, "truthlogicalgraph_run1_lumi1_event8.dot")
             self.assertEqual(result.rechits_root_path.name, "rechits_nano.root")
+            self.assertIsNone(result.debug_dir)
             self.assertEqual(mock_run_checked.call_count, 2)
             rechits_command = mock_run_checked.call_args_list[1].args[0]
             event_index_flag = rechits_command.index("--event-index")
@@ -162,6 +164,73 @@ class TruthPipelineTests(unittest.TestCase):
             self.assertIn("===== cmsRun =====", cmsrun_logs[0])
             self.assertIn("cmsRun stdout", "".join(cmsrun_logs))
             self.assertIn("cmsRun stderr", "".join(cmsrun_logs))
+
+    @mock.patch("truth_pipeline.run_checked")
+    @mock.patch("truth_pipeline.subprocess.Popen")
+    def test_process_cmssw_root_saves_debug_artifacts(self, mock_popen, mock_run_checked):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cmssw_src = root / "CMSSW" / "src"
+            cfg = cmssw_src / "PhysicsTools" / "TruthInfo" / "test" / "dumpTruthGraphsFromGENSIMRECO_cfg.py"
+            cfg.parent.mkdir(parents=True)
+            cfg.write_text("# cfg", encoding="utf-8")
+            input_root = root / "input.root"
+            input_root.write_text("root", encoding="utf-8")
+            job_root = root / "jobs"
+            debug_root = root / "debug"
+
+            def fake_popen(args, **kwargs):
+                outdir = job_root / "job-debug" / "cmssw"
+                outdir.mkdir(parents=True, exist_ok=True)
+                (outdir / "truthlogicalgraph_run1_lumi1_event8.dot").write_text("digraph {}", encoding="utf-8")
+                (outdir / "rechits_nano.root").write_text("root", encoding="utf-8")
+                return FakeProcess(stdout="cmsRun stdout\n", stderr="cmsRun stderr\n")
+
+            mock_popen.side_effect = fake_popen
+
+            result = truth_pipeline.process_cmssw_root(
+                input_root,
+                PipelineOptions(
+                    event_index=8,
+                    job_id="job-debug",
+                    job_root=job_root,
+                    cmssw_src=cmssw_src,
+                    debug_dir=debug_root,
+                    copy_to_viewer=False,
+                ),
+            )
+
+            saved_dir = debug_root / "job-debug"
+            self.assertEqual(result.debug_dir, saved_dir)
+            self.assertIn("process.source.skipEvents = cms.untracked.uint32(8)",
+                          (saved_dir / "dumpTruthGraphs_wrapper_cfg.py").read_text(encoding="utf-8"))
+            pipeline_log = (saved_dir / "pipeline.log").read_text(encoding="utf-8")
+            self.assertIn("===== cmsRun =====", pipeline_log)
+            self.assertIn("[stdout] cmsRun stdout", pipeline_log)
+            self.assertEqual(mock_run_checked.call_args_list[0].kwargs["log_path"], saved_dir / "pipeline.log")
+            self.assertEqual((saved_dir / "cmsrun.stdout.log").read_text(encoding="utf-8"), "cmsRun stdout\n")
+            self.assertEqual((saved_dir / "cmsrun.stderr.log").read_text(encoding="utf-8"), "cmsRun stderr\n")
+
+    @mock.patch("truth_pipeline.subprocess.Popen")
+    def test_process_log_is_saved_when_a_process_times_out(self, mock_popen):
+        class TimedOutProcess(FakeProcess):
+            def wait(self, timeout=None):
+                if timeout == 1:
+                    raise subprocess.TimeoutExpired("cmsRun", timeout)
+                return self.returncode
+
+        mock_popen.return_value = TimedOutProcess()
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "pipeline.log"
+            with self.assertRaisesRegex(truth_pipeline.PipelineError, "timed out"):
+                truth_pipeline.run_process_with_live_output(
+                    ["cmsRun", "wrapper.py"],
+                    cwd=Path(tmp),
+                    timeout=1,
+                    phase="cmsRun",
+                    log_path=log_path,
+                )
+            self.assertIn("===== cmsRun =====", log_path.read_text(encoding="utf-8"))
 
     @mock.patch("truth_pipeline.subprocess.Popen")
     def test_converter_output_is_reported_to_status_callback(self, mock_popen):

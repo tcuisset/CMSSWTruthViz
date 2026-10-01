@@ -48,6 +48,12 @@ needed. You can also put the viewer checkout and a CMSSW area side by side:
 └── CMSSWTruthViz/
 ```
 
+To retain pipeline diagnostics, pass `--save-debug DIR` to
+`visualizeTruthGraph`. Each run gets a `DIR/<job-id>/` directory containing
+the generated wrapper, `pipeline.log`, and separate `cmsRun` stdout/stderr
+logs. The same behavior can be enabled for server-side ROOT jobs with the
+`TRUTHVIZ_DEBUG_DIR` environment variable.
+
 To create a managed project explicitly:
 
 ```bash
