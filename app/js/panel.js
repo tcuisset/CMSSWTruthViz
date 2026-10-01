@@ -400,7 +400,7 @@ const PanelManager = {
         const rawEnergy = Number.parseFloat(data.rawEnergy);
         if (Number.isFinite(rawEnergy)) return rawEnergy;
 
-        return GraphManager.getNodeEnergy(this.makeDataAccessor(data));
+        return this.parseP4(data.p4)?.energy ?? NaN;
     },
 
     getMomentum(data) {

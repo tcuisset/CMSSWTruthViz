@@ -237,6 +237,20 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parts = self.api_parts()
+        if parts == ["app", "js", "runtime-config.js"]:
+            body = b'window.TRUTHVIZ_RUNTIME = Object.freeze({mode: "backend"});\n'
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if parts == ["app", "js", "bundle.js"] or parts == ["app", "js", "rechits.js"] or parts == ["app", "js", "associations.js"]:
+            # Backend sessions never read legacy shared event files.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript")
+            self.end_headers()
+            return
         if parts == ["api", "catalog"]:
             self.send_json_response({"success": True, "catalog": public_catalog()})
             return
@@ -479,10 +493,13 @@ def positive_int(value):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run the Truth Graph Viewer server.")
-    parser.add_argument("--host", default="localhost")
-    parser.add_argument("--start-port", "--port", dest="start_port", default=8009, type=port_number)
-    parser.add_argument("--auto-find-port", action=argparse.BooleanOptionalAction, default=True)
+    parser = argparse.ArgumentParser(description="Run the processing backend (normally launched by run.sh or the production container).")
+    port_mode = os.environ.get("TRUTHVIZ_SERVER_AUTO_FIND_PORT", "1").lower()
+    if port_mode not in {"0", "false", "no", "1", "true", "yes", ""}:
+        parser.error("TRUTHVIZ_SERVER_AUTO_FIND_PORT must be 0/1, true/false, or yes/no")
+    parser.add_argument("--host", default=os.environ.get("TRUTHVIZ_SERVER_HOST", "localhost"))
+    parser.add_argument("--start-port", "--port", dest="start_port", default=os.environ.get("TRUTHVIZ_SERVER_PORT", "8009"), type=port_number)
+    parser.add_argument("--auto-find-port", action=argparse.BooleanOptionalAction, default=port_mode not in {"0", "false", "no"})
     parser.add_argument("--max-port-attempts", default=100, type=positive_int)
     return parser.parse_args()
 

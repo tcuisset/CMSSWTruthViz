@@ -29,57 +29,61 @@ The current app is about simulation truth graph exploration, not CMSSW module de
 - [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md): short implementation notes and maintenance guidance.
 - [OPENSHIFT.md](OPENSHIFT.md): concise OpenShift deployment notes using the CMSSW EL9 container image.
 
-## Quick Start
+## Supported Entry Points
 
-For the complete CMSSW-capable environment, use Docker Compose:
+| Use case | Command | Frontend mode |
+| --- | --- | --- |
+| Human development inside a devcontainer / configured CMSSW environment | `./run.sh` | Backend |
+| Development and testing from outside the container (human or LLM) | `./dev full-setup`, then `./dev url` | Backend |
+| Local end-user viewing | `./visualizeTruthGraph FILE` | Visualization only |
+| OpenShift deployment | Production `Dockerfile` | Backend |
+
+`server.py` implements the backend; direct invocation is for debugging an already
+configured environment. `scripts/run-production.sh` is an internal image bootstrap,
+not another local launcher. The redundant `scripts/start-server.sh` has been removed.
+
+For Compose, the host port is dynamic: always use `./dev url`. Source edits are
+bind-mounted. Use `./dev logs`, `./dev shell`, `./dev test`, and `./dev stop`.
+
+`./run.sh` prepares browser/Python dependencies and a CMSSW environment before
+starting the backend. It is intended for a shell inside a devcontainer or an
+already suitable host. ROOT processing requires a CMSSW runtime.
+
+## Local Visualization
 
 ```bash
-cd CMSSWGraphViz
-./dev full-setup
-./dev url
-```
-
-The host port is assigned dynamically; open the URL printed by `./dev url`.
-Source files are bind-mounted, so edits are visible without rebuilding the
-image. Use `./dev logs`, `./dev shell`, and `./dev stop` to manage the service.
-
-For prepared/catalogue inputs on a host that already has Python 3.9+ and Node.js
-20+, `./run.sh` remains available. It generates the pinned browser libraries,
-creates `venv/`, installs Python dependencies, and starts the server, normally
-at `http://localhost:8009/app/`. ROOT processing additionally requires a valid
-CMSSW runtime. Set `TRUTHVIZ_CMSSW_TOPIC=someone:branch` to create and build a
-local CMSSW project from a fork; see [INSTALL.md](INSTALL.md) for details.
-
-To generate viewer inputs directly from a CMSSW EDM ROOT file:
-
-```bash
+./visualizeTruthGraph event.json
+./visualizeTruthGraph bundle.json --rechits rechits.json --associations associations.json
 ./visualizeTruthGraph myInputFile.root --event-index 0
 ```
 
-For a failed or suspicious run, preserve the generated `cmsRun` wrapper and
-pipeline logs with `--save-debug /path/to/debug`; artifacts are written below
-that directory using the run's job ID.
+The CLI opens the selected event directly in the browser. Its HTTP server serves
+only static viewer resources and the selected event; it has no upload, catalogue,
+or processing API. JSON viewing uses Python's standard library. ROOT input first
+runs the CMSSW pipeline with the configured Python/CMSSW environment, then opens
+the resulting graph and rechits. Generated files stay in an isolated job directory;
+they do not replace another viewer's event.
 
-This requires a CMSSW runtime with the TruthInfo plugins available. The script
-uses `--cmssw-src`, `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE/src`, the managed
-`data/cmssw/CMSSW_20_1_0_pre3/src` project, or the sibling
-`CMSSW_20_1_0_pre3/src` checkout.
+The default port is automatically allocated. Use `--no-browser` for a remote shell,
+`--port PORT` for a fixed port, `--no-server` to validate/convert only, and
+`--save-debug DIR` to retain ROOT processing diagnostics. Stop the viewer with Ctrl-C.
+Install frontend assets once with `npm ci && npm run vendor`; ROOT conversion also
+needs the Python dependencies and TruthInfo plugins described in [INSTALL.md](INSTALL.md).
 
-## Static Mode
+## Two Frontend Modes
 
-After generating the embedded JavaScript bundle, the app can be opened directly:
+**Visualization only** is the default for static HTTP hosts, `file://`, and the local
+CLI. Graph navigation, layouts, search, rechits, associations and exports are client
+side. **Open JSON** reads a bundle or complete version 1 event envelope locally,
+with optional rechits/associations JSON; no file is uploaded. Open `app/index.html`
+(after building vendor assets) or serve `app/` with any static server. Legacy embedded
+`app/js/bundle.js`, `rechits.js`, and `associations.js` remain supported.
 
-```bash
-python preprocess/build_bundle.py truthgraph.dot data/bundle.json
-open app/index.html
-```
-
-Static mode uses:
-
-- `app/js/bundle.js`, generated from `data/bundle.json`
-- `app/js/rechits.js`, optionally generated from `data/rechits.json`
-
-File upload is hidden in static mode because uploads require the Python server.
+**Backend mode** is explicitly enabled by `server.py` through
+`app/js/runtime-config.js`. Its opening launcher provides saved browser sessions,
+server catalogue samples, CMSSW ROOT upload/EOS processing, and prepared DOT plus
+optional rechits processing. Results remain isolated and are saved/verified in the
+browser before server cleanup. URL protocol alone never enables backend features.
 
 ## Repository Layout
 
@@ -116,6 +120,7 @@ CMSSWGraphViz/
 ├── server.py
 ├── truth_pipeline.py
 ├── visualizeTruthGraph
+├── viewer_cli.py
 ├── dev
 ├── run.sh
 ├── Dockerfile

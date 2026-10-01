@@ -94,7 +94,7 @@ Currently supported engines:
 
 `UploadManager` posts files to `../upload`, then polls `../upload-status`. `server.py` processes uploads in a background thread and returns build states. Uploads overwrite the local `truthgraph.dot` and optional `rechits.root`.
 
-The upload workflow regenerates both JSON and static JS wrappers so the newly uploaded data also works in static mode after processing.
+Backend uploads produce isolated JSON event envelopes. They never publish shared static JS wrappers. The local CLI serves its own immutable event to the visualization-only frontend.
 
 ## Maintenance Notes
 

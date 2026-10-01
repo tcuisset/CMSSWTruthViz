@@ -8,7 +8,9 @@ script tags; there is no application bundler.
 ## Runtime Entry Points
 
 - `app/index.html`: page structure, controls, upload modal, local dependency scripts, embedded data scripts, and app script order.
-- `app/js/main.js`: loads data, initializes all managers, updates graph statistics, and hides upload controls in static mode.
+- `app/js/main.js`: loads data, initializes all managers, and selects visualization-only or backend behavior from `runtime-config.js`.
+- `app/js/viewer.js`: reads JSON bundles/event envelopes and optional rechits/associations entirely client side.
+- `app/js/runtime-config.js`: defaults to visualization only on all static hosts; the Python backend explicitly serves a backend configuration.
 - `app/js/graph.js`: Cytoscape lifecycle, stylesheet, layout registration, node/edge semantics, filters, selection, and viewport fitting.
 - `app/js/panel.js`: side panel, breadcrumbs, DOT attributes, neighbor lists, rendered DOT labels, and persisted panel width.
 - `app/js/search.js`: text search and advanced attribute search.
@@ -282,7 +284,7 @@ The 3D controls can show:
 - Direct hits: rechits listed in the selected node's `directHitsDetIds`.
 - Subgraph hits: direct hits from the selected node and its descendants.
 
-Real rechit data comes from `data/rechits.json` in server mode or `app/js/rechits.js` in static mode. If no real rechit data exists, the panel creates placeholder points so the UI remains testable.
+Real rechit data comes from an isolated event envelope in backend/CLI mode, local JSON in visualization mode, or legacy `app/js/rechits.js`. If no real rechit data exists, the panel creates placeholder points so the UI remains testable.
 
 ## Keyboard Shortcuts
 

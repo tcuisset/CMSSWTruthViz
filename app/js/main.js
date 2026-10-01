@@ -1,17 +1,15 @@
 /**
  * main.js - Application initialization
  * Loads data and initializes the viewer
- * Supports both static mode (file://) and server mode (http://)
+ * Supports visualization-only and explicitly enabled backend modes
  */
 
 // Global data storage
 window.bundleData = null;
 
-/**
- * Detect if running in static mode
- */
-function isStaticMode() {
-    return window.location.protocol === 'file:';
+/** Backend features are enabled by server.py, independently of URL protocol. */
+function isViewerMode() {
+    return window.TRUTHVIZ_RUNTIME?.mode !== 'backend';
 }
 
 /**
@@ -20,27 +18,30 @@ function isStaticMode() {
 async function initApp() {
     console.log('Initializing Graph Visualization...');
 
-    const staticMode = isStaticMode();
-    console.log(`Mode: ${staticMode ? 'Static (file://)' : 'Server (http://)'}`);
+    const viewerMode = isViewerMode();
+    console.log(`Mode: ${viewerMode ? 'Visualization only' : 'Backend'}`);
 
     try {
         // Show loading indicator
         showLoading(true);
 
-        // Static exports keep their embedded one-event behavior. Server mode starts
-        // from an explicit browser session or catalogue selection; a bare URL opens
-        // the launcher and never reads pod-wide data files.
-        if (staticMode && window.EMBEDDED_BUNDLE_DATA) {
-            // Static mode: Use embedded data
-            console.log('Loading embedded bundle data...');
-            window.bundleData = window.EMBEDDED_BUNDLE_DATA;
-            attachEmbeddedRechitsData();
-            console.log('Embedded bundle data loaded:', {
-                nodes: window.bundleData.nodes.length,
-                edges: window.bundleData.edges.length,
-                rechits: window.bundleData.rechits?.length || 0
-            });
-        } else if (!staticMode) {
+        if (viewerMode) {
+            ViewerInput.init();
+            const sessionId = new URLSearchParams(window.location.search).get('session');
+            const selected = sessionId ? await SessionStore.get(sessionId) : null;
+            if (sessionId && !selected) throw new Error('This browser session no longer exists');
+            if (selected || window.EMBEDDED_EVENT_DATA) {
+                attachViewerEvent(selected || window.EMBEDDED_EVENT_DATA);
+            } else if (window.EMBEDDED_BUNDLE_DATA) {
+                window.bundleData = window.EMBEDDED_BUNDLE_DATA;
+                attachEmbeddedRechitsData();
+                window.associationData = window.EMBEDDED_ASSOCIATION_DATA || null;
+            } else {
+                showLoading(false);
+                ViewerInput.show();
+                return;
+            }
+        } else {
             await UploadManager.init();
             const selection = await loadServerSelection();
             if (!selection) {
@@ -50,8 +51,6 @@ async function initApp() {
             }
             attachSessionEnvelope(selection);
         }
-
-        if (staticMode) await attachAssociationData();
 
         // Initialize graph
         GraphManager.init(window.bundleData);
@@ -64,18 +63,6 @@ async function initApp() {
         DependencyExplorer.init();
         KeyboardNav.init();
         ExportManager.init();
-
-        // Initialize upload only in server mode
-        if (!staticMode) {
-            const uploadBtn = document.getElementById('upload-btn');
-            if (uploadBtn) uploadBtn.textContent = 'Open event';
-        } else {
-            // Hide upload button in static mode
-            const uploadBtn = document.getElementById('upload-btn');
-            if (uploadBtn) {
-                uploadBtn.style.display = 'none';
-            }
-        }
 
         // Update stats
         updateStats({
@@ -95,7 +82,8 @@ async function initApp() {
         console.error('Error initializing application:', error);
         showLoading(false);
         alert(`Failed to initialize application: ${error.message}`);
-        if (!staticMode && UploadManager.modal) {
+        if (viewerMode) ViewerInput.show();
+        if (!viewerMode && UploadManager.modal) {
             await UploadManager.showLauncher(true);
         }
     }
@@ -173,32 +161,3 @@ function updateStats(stats) {
 
 // Start application when DOM is ready
 document.addEventListener('DOMContentLoaded', initApp);
-
-/**
- * Load the reco to truth-branch associations if the job produced them. A graph dumped
- * without the associators simply has no file, which is not an error.
- */
-async function attachAssociationData() {
-    // A page opened as a file cannot fetch, so the generated associations.js is used
-    // when it is there; the server path still reads the JSON, which is always current.
-    if (isStaticMode() && window.EMBEDDED_ASSOCIATION_DATA) {
-        window.associationData = window.EMBEDDED_ASSOCIATION_DATA;
-        console.log('Associations loaded from the embedded file:',
-                    window.associationData.recoObjects?.length || 0, 'reco objects');
-        return;
-    }
-
-    try {
-        const response = await fetch('../data/associations.json');
-        if (!response.ok) return;
-        window.associationData = await response.json();
-        console.log('Associations loaded:', window.associationData.recoObjects?.length || 0, 'reco objects');
-    } catch (error) {
-        if (window.EMBEDDED_ASSOCIATION_DATA) {
-            window.associationData = window.EMBEDDED_ASSOCIATION_DATA;
-            console.log('Associations loaded from the embedded file after a failed fetch');
-            return;
-        }
-        console.log('No association data:', error.message);
-    }
-}

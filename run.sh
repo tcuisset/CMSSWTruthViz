@@ -167,4 +167,4 @@ fi
 
 echo
 echo "Starting web server..."
-exec "$project_root/scripts/start-server.sh"
+exec "${TRUTHVIZ_SERVER_PYTHON:-$project_root/venv/bin/python}" "$project_root/server.py"

@@ -92,7 +92,8 @@ affects runtime behavior:
 ```bash
 bash -n run.sh dev visualizeTruthGraph scripts/*.sh
 venv/bin/python -m unittest discover -s tests -v
-venv/bin/python -m py_compile server.py truth_pipeline.py visualizeTruthGraph preprocess/*.py tests/*.py
+venv/bin/python -m py_compile server.py viewer_cli.py truth_pipeline.py preprocess/*.py tests/*.py
+node --test tests/frontend-modes.test.cjs
 docker compose config
 ```
 

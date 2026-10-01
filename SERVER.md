@@ -1,3 +1,11 @@
+> Supported launchers: `run.sh` (configured development shell), `dev` (Compose),
+> and `visualizeTruthGraph FILE` (local visualization only). `server.py` is the
+> processing backend implementation. Production uses its internal image bootstrap.
+> See [README.md](README.md#supported-entry-points) for the mode/launcher matrix.
+>
+> The local viewer CLI does not start this backend or expose its APIs. The backend
+> explicitly enables frontend processing features through `app/js/runtime-config.js`.
+
 # Server And Session Processing
 
 The HTTP deployment has no pod-wide current event. Every uploaded CMSSW ROOT or

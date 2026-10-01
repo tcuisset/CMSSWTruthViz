@@ -134,47 +134,51 @@ If port `8009` is in use, the server tries following ports and prints the one it
    release. It creates a managed project only when needed, including fork topics.
 5. Starts `server.py` with one isolated-job worker.
 
-## Manual Setup
+## Visualization Only
+
+Install the pinned frontend assets once:
 
 ```bash
-cd CMSSWGraphViz
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
+npm run vendor
+```
+
+Then use `./visualizeTruthGraph bundle.json`, optionally with `--rechits FILE`
+and `--associations FILE`. A version 1 event envelope includes these data directly.
+JSON viewing requires only Python's standard library. The CLI opens a read-only
+static viewer on an automatically allocated port; it never starts the processing
+backend. `--no-browser` prints the URL, and Ctrl-C stops the server.
+
+For ROOT input use `./visualizeTruthGraph input.root --event-index 0` in a configured
+CMSSW environment (such as the devcontainer). The launcher prefers `venv/bin/python`
+when available; `TRUTHVIZ_PYTHON` selects another interpreter. ROOT conversion needs
+`requirements.txt` installed in that interpreter and TruthInfo available. It writes
+an isolated job under `data/jobs/` (or `--job-root`), then serves its graph, rechits
+and associations directly. `--no-server` converts without opening a viewer. There
+is no packaged standalone end-user container yet; the existing image is the full
+backend deployment image.
+
+You can also open `app/index.html` or serve `app/` with any static HTTP server.
+The **Open JSON** dialog reads files entirely client side. Generated legacy embedded
+JS wrappers remain supported, but are no longer required to open JSON. Backend
+features are enabled only when `server.py` serves `runtime-config.js`, independently
+of `file://` versus HTTP.
+
+## Manual Backend Setup (Debugging)
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund
 npm run vendor
 python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python preprocess/build_bundle.py truthgraph.dot data/bundle.json
-python server.py
+venv/bin/python -m pip install -r requirements.txt
+venv/bin/python server.py
 ```
 
-Then open the application URL printed by `server.py`.
-
-## Static Mode
-
-Static mode is useful when you want to open the app without the Python server. It requires generated embedded data:
-
-```bash
-cd CMSSWGraphViz
-source venv/bin/activate
-python preprocess/build_bundle.py truthgraph.dot data/bundle.json
-open app/index.html
-```
-
-On Linux, use:
-
-```bash
-xdg-open app/index.html
-```
-
-Static mode reads `app/js/bundle.js`. Upload is disabled because there is no server endpoint.
-
-Optional static rechits:
-
-```bash
-python preprocess/build_rechits_json.py rechits.root data/rechits.json --event-index 0
-```
-
-This also writes `app/js/rechits.js` unless `--no-js-output` is passed.
+Normal development uses `./run.sh` instead. `server.py` accepts
+`TRUTHVIZ_SERVER_HOST`, `TRUTHVIZ_SERVER_PORT`, and
+`TRUTHVIZ_SERVER_AUTO_FIND_PORT`; explicit CLI arguments override those defaults.
+Both development and production bootstraps invoke it directly. There is no
+separate `start-server.sh` launcher.
 
 ## Server Mode Launcher
 
@@ -194,8 +198,8 @@ before its random server job directory is deleted.
 `Dockerfile` is the single production image definition. It builds the pinned
 browser dependencies and Python environment, then uses the small
 `scripts/run-production.sh` entrypoint on port 8080. The production entrypoint
-does not install npm packages, create a venv, provision CMSSW, or take an
-installation lock.
+does not install npm packages or create a venv. It validates the configured
+CMSSW area and may provision a requested fork topic under an installation lock.
 
 The default production image derives the upstream CVMFS path from
 `TRUTHVIZ_CMSSW_RELEASE` and `TRUTHVIZ_SCRAM_ARCH`. For a fork deployment, set

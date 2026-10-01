@@ -41,3 +41,18 @@ for (const [source, destination] of minifiedAssets) {
 }
 
 console.log(`Generated ${assets.size + minifiedAssets.size} browser dependencies in app/vendor/`);
+
+// Empty legacy wrappers allow a fresh static viewer to open JSON without
+// missing-resource errors. Never overwrite an existing generated event.
+for (const [file, variable] of [
+  ["bundle.js", "EMBEDDED_BUNDLE_DATA"],
+  ["rechits.js", "EMBEDDED_RECHITS_DATA"],
+  ["associations.js", "EMBEDDED_ASSOCIATION_DATA"]
+]) {
+  try {
+    await writeFile(path.join(projectRoot, "app", "js", file),
+      `window.${variable} = null;\n`, { flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+}

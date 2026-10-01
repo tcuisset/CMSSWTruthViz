@@ -1,120 +1,27 @@
-#!/usr/bin/env python3
-"""
-Generate viewer inputs from a CMSSW EDM ROOT file, then optionally start the app server.
-"""
-
-import argparse
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-from truth_pipeline import PipelineError, PipelineOptions, parse_dumper_args, process_cmssw_root
-
-
-def port_number(value):
-    try:
-        port = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(f"invalid port: {value}") from exc
-    if not 1 <= port <= 65535:
-        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
-    return port
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Generate Truth Graph Viewer inputs from a CMSSW EDM ROOT file."
-    )
-    parser.add_argument("input_root", type=Path, help="Input CMSSW EDM ROOT file.")
-    parser.add_argument(
-        "--event-index",
-        type=int,
-        default=0,
-        help="Zero-based event index to visualize. Defaults to 0.",
-    )
-    parser.add_argument(
-        "--cmssw-src",
-        type=Path,
-        default=None,
-        help="CMSSW src directory. Defaults to TRUTHVIZ_CMSSW_SRC, CMSSW_BASE/src, or sibling CMSSW_20_1_0_pre3/src.",
-    )
-    parser.add_argument(
-        "--job-root",
-        type=Path,
-        default=None,
-        help="Directory where processing jobs are stored. Defaults to data/jobs or TRUTHVIZ_JOB_ROOT.",
-    )
-    parser.add_argument(
-        "--save-debug",
-        "--debug-dir",
-        dest="debug_dir",
-        type=Path,
-        default=None,
-        metavar="DIR",
-        help="Save the wrapper and pipeline logs under DIR/<job-id>; also available as TRUTHVIZ_DEBUG_DIR.",
-    )
-    parser.add_argument(
-        "--dumper-args",
-        default="",
-        help="Extra arguments passed to dumpTruthGraphsFromGENSIMRECO_cfg.py, quoted as one string.",
-    )
-    parser.add_argument(
-        "--no-server",
-        action="store_true",
-        help="Generate viewer files and exit without starting server.py.",
-    )
-    parser.add_argument("--host", default="localhost", help="Server host. Defaults to localhost.")
-    parser.add_argument("--port", type=port_number, default=8009, help="Server start port. Defaults to 8009.")
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
-    project_root = Path(__file__).resolve().parent
-
-    try:
-        result = process_cmssw_root(
-            args.input_root,
-            PipelineOptions(
-                event_index=args.event_index,
-                dumper_args=parse_dumper_args(args.dumper_args),
-                job_root=args.job_root,
-                cmssw_src=args.cmssw_src,
-                debug_dir=args.debug_dir,
-            ),
-        )
-    except (PipelineError, ValueError, subprocess.TimeoutExpired) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-    print("Truth graph inputs generated.")
-    print(f"  Job: {result.job_id}")
-    print(f"  DOT: {result.dot_path}")
-    print(f"  Rechits ROOT: {result.rechits_root_path}")
-    print(f"  Bundle: {result.viewer_bundle_path or result.bundle_path}")
-    print(f"  Rechits JSON: {result.viewer_rechits_path or result.rechits_json_path}")
-    if result.debug_dir:
-        print(f"  Debug files: {result.debug_dir}")
-
-    if args.no_server:
-        return 0
-
-    url = f"http://{args.host}:{args.port}/app/"
-    print(f"Starting viewer server: {url}")
-    os.execv(
-        sys.executable,
-        [
-            sys.executable,
-            str(project_root / "server.py"),
-            "--host",
-            args.host,
-            "--start-port",
-            str(args.port),
-        ],
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+#!/usr/bin/env bash
+# Public local viewer CLI. JSON viewing needs only Python's standard library.
+set -euo pipefail
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "${TRUTHVIZ_PYTHON:-}" ]; then
+    python_bin="$TRUTHVIZ_PYTHON"
+elif [ -x "$project_root/venv/bin/python" ]; then
+    python_bin="$project_root/venv/bin/python"
+else
+    python_bin=python3
+fi
+# A fresh CMSSW container shell may not yet have scram on PATH. JSON viewing
+# remains independent of CMS; ROOT conversion needs the same bootstrap as run.sh.
+for argument in "$@"; do
+    if [[ "${argument,,}" == *.root ]] && ! command -v scram >/dev/null 2>&1; then
+        cmsset_default="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+        if [ -r "$cmsset_default" ]; then
+            export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+            set +u
+            # shellcheck disable=SC1090
+            source "$cmsset_default"
+            set -u
+        fi
+        break
+    fi
+done
+exec "$python_bin" "$project_root/viewer_cli.py" "$@"

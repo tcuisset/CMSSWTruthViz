@@ -188,6 +188,8 @@ printf 'git %s\\n' "$*" >> "$CALL_LOG"
                     "TRUTHVIZ_CMSSW_RELEASE": "CMSSW_TEST",
                     "TRUTHVIZ_SCRAM_ARCH": "el9_test",
                     "TRUTHVIZ_CMSSW_TOPIC": "alice:feature",
+                    "TRUTHVIZ_CMSSW_SRC": "",
+                    "CMSSW_BASE": "",
                     "TRUTHVIZ_CMSSW_INSTALL_ROOT": str(install_root),
                     "TRUTHVIZ_SERVER_PYTHON": "/bin/true",
                 },
@@ -197,16 +199,23 @@ printf 'git %s\\n' "$*" >> "$CALL_LOG"
             self.assertEqual((project / ".truthviz-topic").read_text(), "alice:feature")
             self.assertIn("git cms-rebase-topic alice:feature", call_log.read_text())
 
-    def test_start_server_rejects_invalid_port_mode(self):
-        result = self.run_script(
-            "scripts/start-server.sh",
-            env={
-                "TRUTHVIZ_SERVER_PYTHON": "/bin/true",
-                "TRUTHVIZ_SERVER_AUTO_FIND_PORT": "sometimes",
-            },
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("must be 0/1", result.stderr)
+    def test_public_viewer_opens_json_from_another_working_directory(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            event = Path(temporary_directory) / "event with spaces.json"
+            event.write_text('{"nodes": [], "edges": []}')
+            result = subprocess.run(
+                [str(PROJECT_ROOT / "visualizeTruthGraph"), str(event), "--no-server"],
+                cwd=temporary_directory,
+                env={**os.environ, "TRUTHVIZ_PYTHON": "python3"},
+                text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Event ready.", result.stdout)
+
+    def test_public_viewer_rejects_negative_event_index(self):
+        result = self.run_script("visualizeTruthGraph", "input.root", "--event-index", "-1", "--no-server")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be non-negative", result.stderr)
 
 
 if __name__ == "__main__":

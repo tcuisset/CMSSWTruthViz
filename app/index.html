@@ -391,7 +391,30 @@
         </div>
     </div>
 
-    <!-- Event launcher -->
+    <!-- Visualization-only opening: files are read in the browser. -->
+    <div id="viewer-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Open a JSON event</h2>
+                <button id="viewer-close-btn" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Open a graph bundle or complete event JSON. Files stay in this browser.</p>
+                <form id="viewer-form">
+                    <div class="form-group"><label for="viewer-json">Graph bundle or event JSON:</label>
+                        <input id="viewer-json" type="file" accept=".json" required></div>
+                    <div class="form-group"><label for="viewer-rechits">Optional rechits JSON:</label>
+                        <input id="viewer-rechits" type="file" accept=".json"></div>
+                    <div class="form-group"><label for="viewer-associations">Optional associations JSON:</label>
+                        <input id="viewer-associations" type="file" accept=".json"></div>
+                    <button type="submit">Open event</button>
+                    <p id="viewer-status" role="status"></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backend event launcher -->
     <div id="upload-modal" class="modal hidden">
         <div class="modal-content launcher-content">
             <div class="modal-header">
@@ -494,6 +517,8 @@
     <script defer src="vendor/plotly-2.35.2.min.js"></script>
 
     <!-- Embedded Bundle Data (for static mode) -->
+    <script defer src="js/runtime-config.js"></script>
+    <script defer src="js/event.js"></script>
     <script defer src="js/bundle.js"></script>
     <script defer src="js/rechits.js"></script>
     <script defer src="js/associations.js"></script>
@@ -512,6 +537,7 @@
     <script defer src="js/export.js"></script>
     <script defer src="js/session-store.js"></script>
     <script defer src="js/upload.js"></script>
+    <script defer src="js/viewer.js"></script>
     <script defer src="js/main.js"></script>
     <script defer src="js/presentation.js"></script>
 </body>

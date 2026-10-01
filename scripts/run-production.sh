@@ -98,4 +98,8 @@ export TRUTHVIZ_CMSSW_SRC="$cmssw_src"
 echo "[production] CMSSW source validated"
 echo "[production] Starting server on ${TRUTHVIZ_SERVER_HOST:-0.0.0.0}:${TRUTHVIZ_SERVER_PORT:-8080}"
 
-exec "$project_root/scripts/start-server.sh"
+export TRUTHVIZ_SERVER_HOST="${TRUTHVIZ_SERVER_HOST:-0.0.0.0}"
+export TRUTHVIZ_SERVER_PORT="${TRUTHVIZ_SERVER_PORT:-8080}"
+export TRUTHVIZ_SERVER_AUTO_FIND_PORT="${TRUTHVIZ_SERVER_AUTO_FIND_PORT:-0}"
+
+exec "${TRUTHVIZ_SERVER_PYTHON:-$project_root/venv/bin/python}" "$project_root/server.py"
