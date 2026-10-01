@@ -38,15 +38,49 @@ CMSSW `src` directory in this order:
 5. the sibling release directory of this checkout
 
 The release name defaults to `CMSSW_20_1_0_pre3` and is overridden with
-`TRUTHVIZ_CMSSW_RELEASE`. `run.sh` reuses or creates a managed project under
-`data/cmssw` when CVMFS is available. You can also put the viewer checkout and
-the CMSSW area side by side to use an existing project:
+`TRUTHVIZ_CMSSW_RELEASE`. For an unmodified upstream release, `run.sh` uses the
+release directly from CVMFS when it is available. No local CMSSW project is
+needed. You can also put the viewer checkout and a CMSSW area side by side:
 
 ```text
 <work area>/
 ├── CMSSW_20_1_0_pre3/src/
 └── CMSSWTruthViz/
 ```
+
+To create a managed project explicitly:
+
+```bash
+scripts/install-cmssw.sh \
+  --release CMSSW_20_1_0_pre3 \
+  --arch el9_amd64_gcc14 \
+  --install-root data/cmssw
+```
+
+To install code from a fork, add the topic understood by
+`git cms-rebase-topic`. The installer creates the base release, enters its
+runtime, rebases the topic, and runs `scram b`:
+
+```bash
+scripts/install-cmssw.sh \
+  --release CMSSW_20_1_0_pre3 \
+  --arch el9_amd64_gcc14 \
+  --install-root data/cmssw-my-topic \
+  --topic someone:my-branch \
+  --jobs 8
+```
+
+For local development, the equivalent environment variables can be passed to
+`run.sh`; it invokes the installer automatically when a topic is requested:
+
+```bash
+TRUTHVIZ_CMSSW_TOPIC=someone:my-branch \
+TRUTHVIZ_CMSSW_INSTALL_ROOT=data/cmssw-my-topic \
+./run.sh
+```
+
+An existing managed project is reused only when its recorded topic matches.
+Choose a different install root for a different topic or base release.
 
 ## Docker Development Environment
 
@@ -90,8 +124,8 @@ If port `8009` is in use, the server tries following ports and prints the one it
 1. Runs `npm ci` and generates `app/vendor/` if the browser dependencies are absent.
 2. Creates `venv/` if it does not exist.
 3. Installs Python dependencies from `requirements.txt` if needed.
-4. Reuses or creates the configured CMSSW release under `data/cmssw` when no
-   `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` is supplied.
+4. Uses an explicit CMSSW area, an existing local project, or the upstream CVMFS
+   release. It creates a managed project only when needed, including fork topics.
 5. Starts `server.py` with one isolated-job worker.
 
 ## Manual Setup
@@ -152,10 +186,17 @@ before its random server job directory is deleted.
 ## Production Image and OpenShift
 
 `Dockerfile` is the single production image definition. It builds the pinned
-browser dependencies in a Node.js stage, installs the Python environment in the
-CMSSW EL9 image, and starts `run.sh` on port 8080. OpenShift must use Docker
-strategy. See [OPENSHIFT.md](OPENSHIFT.md) for the deployment commands, mounts,
-and runtime variables.
+browser dependencies and Python environment, then uses the small
+`scripts/run-production.sh` entrypoint on port 8080. The production entrypoint
+does not install npm packages, create a venv, provision CMSSW, or take an
+installation lock.
+
+The default production image points `TRUTHVIZ_CMSSW_SRC` directly at its
+configured upstream release on CVMFS. Select another upstream release with the
+`TRUTHVIZ_CMSSW_RELEASE` and `TRUTHVIZ_SCRAM_ARCH` Docker build arguments. A
+fork build needs a CMSSW project prepared by `scripts/install-cmssw.sh` in a
+CVMFS-enabled build or init environment and exposed to the application through
+`TRUTHVIZ_CMSSW_SRC`. See [OPENSHIFT.md](OPENSHIFT.md).
 
 ## Troubleshooting
 

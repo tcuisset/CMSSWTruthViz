@@ -61,6 +61,8 @@ venv/bin/python preprocess/build_catalog_artifacts.py --sample dy-to-tautau
 - `TRUTHVIZ_CMSRUN_TIMEOUT_SEC`: CMSSW timeout, default `3600`.
 - `TRUTHVIZ_CMSSW_SRC`, `CMSSW_BASE`, and `TRUTHVIZ_CMSRUN_WRAPPER`: CMSSW
   runtime selection.
+- `TRUTHVIZ_CMSSW_TOPIC`: optional `user:branch` passed to the local CMSSW
+  installer. Production startup never installs a topic automatically.
 - `TRUTHVIZ_ALLOW_LOCAL_ROOT_PATHS=1`: permit non-EOS server paths for local
   development only.
 

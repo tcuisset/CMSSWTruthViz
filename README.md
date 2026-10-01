@@ -47,7 +47,8 @@ For prepared/catalogue inputs on a host that already has Python 3.9+ and Node.js
 20+, `./run.sh` remains available. It generates the pinned browser libraries,
 creates `venv/`, installs Python dependencies, and starts the server, normally
 at `http://localhost:8009/app/`. ROOT processing additionally requires a valid
-CMSSW runtime.
+CMSSW runtime. Set `TRUTHVIZ_CMSSW_TOPIC=someone:branch` to create and build a
+local CMSSW project from a fork; see [INSTALL.md](INSTALL.md) for details.
 
 To generate viewer inputs directly from a CMSSW EDM ROOT file:
 

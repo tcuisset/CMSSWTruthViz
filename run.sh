@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Quick start script for CMSSW Graph Visualization
+# Local development bootstrap for CMSSW Graph Visualization.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$project_root"
 
 usage() {
-    cat <<EOF
+    cat <<'EOF'
 Usage: ./run.sh [options]
+
+Prepare local JavaScript, Python, and CMSSW dependencies, then start the server.
 
 Options:
   -h, --help         Show this help message
 
-Environment:
-  TRUTHVIZ_SERVER_HOST            Server bind host (default: localhost)
-  TRUTHVIZ_SERVER_PORT            Server port (default: 8009)
+CMSSW customization:
+  TRUTHVIZ_CMSSW_RELEASE       Base release (default: CMSSW_20_1_0_pre3)
+  TRUTHVIZ_SCRAM_ARCH          SCRAM architecture (default: el9_amd64_gcc14)
+  TRUTHVIZ_CMSSW_TOPIC         Optional fork topic, for example user:branch
+  TRUTHVIZ_CMSSW_BUILD_JOBS    Parallel jobs used to build a topic (default: 4)
+  TRUTHVIZ_CMSSW_INSTALL_ROOT  Managed-project parent (default: data/cmssw)
+
+Server configuration:
+  TRUTHVIZ_SERVER_HOST            Bind host (default: localhost)
+  TRUTHVIZ_SERVER_PORT            Port (default: 8009)
   TRUTHVIZ_SERVER_AUTO_FIND_PORT  Set to 0 to require the selected port
 EOF
 }
@@ -27,122 +36,69 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         *)
-            echo "Error: Unknown option: $1"
-            echo ""
-            usage
-            exit 1
+            echo "Error: unknown option: $1" >&2
+            usage >&2
+            exit 2
             ;;
     esac
 done
 
 echo "============================================================"
-echo "Truth Graph Viewer"
+echo "Truth Graph Viewer: local setup"
 echo "============================================================"
-echo ""
+echo
 
-# Browser libraries are generated from the pinned npm dependencies and are not
-# stored in Git. Keep an existing installation offline-friendly, but bootstrap
-# it automatically after a fresh clone.
-if [ ! -f "app/vendor/plotly-2.35.2.min.js" ]; then
-    if ! command -v npm >/dev/null 2>&1; then
-        echo "Error: frontend dependencies are missing and npm was not found."
-        echo "Install Node.js 20 or newer, then run 'npm ci && npm run vendor'."
+if [ ! -f app/vendor/plotly-2.35.2.min.js ]; then
+    command -v npm >/dev/null 2>&1 || {
+        echo "Error: frontend dependencies are missing and npm was not found." >&2
+        echo "Install Node.js 20 or newer, then run 'npm ci && npm run vendor'." >&2
         exit 1
-    fi
+    }
     echo "Installing frontend dependencies..."
     npm ci --ignore-scripts --no-audit --no-fund
     npm run vendor
-    echo "✓ Frontend dependencies installed"
-    echo ""
 fi
 
-# The app needs Python 3.9 or newer. The system python3 can be older.
-PYTHON_CANDIDATES="python3 python3.14 python3.13 python3.12 python3.11 python3.10 python3.9"
-
+python_candidates="python3 python3.14 python3.13 python3.12 python3.11 python3.10 python3.9"
 select_python() {
     local candidate
-    for candidate in "${TRUTHVIZ_PYTHON:-}" $PYTHON_CANDIDATES; do
+    for candidate in "${TRUTHVIZ_PYTHON:-}" $python_candidates; do
         [ -n "$candidate" ] || continue
         command -v "$candidate" >/dev/null 2>&1 || continue
         if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then
-            echo "$candidate"
+            printf '%s\n' "$candidate"
             return 0
         fi
     done
     return 1
 }
 
-report_python_candidates() {
-    local candidate version
-    for candidate in $PYTHON_CANDIDATES; do
-        if command -v "$candidate" >/dev/null 2>&1; then
-            version="$("$candidate" -V 2>&1)"
-            echo "  $candidate: $version"
-        fi
-    done
-}
-
-# Check if virtual environment exists
-VENV_PYTHON="venv/bin/python"
-if [ ! -x "$VENV_PYTHON" ] || ! "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
-    if ! PYTHON_BIN="$(select_python)"; then
-        echo "Error: no python3 of version 3.9 or newer was found."
-        echo "Interpreters on this machine:"
-        report_python_candidates
-        echo "Install one, for example 'sudo apt install python3-venv', or set"
-        echo "TRUTHVIZ_PYTHON to a suitable interpreter."
+venv_python="$project_root/venv/bin/python"
+if [ ! -x "$venv_python" ] || ! "$venv_python" -m pip --version >/dev/null 2>&1; then
+    python_bin="$(select_python)" || {
+        echo "Error: Python 3.9 or newer was not found." >&2
         exit 1
-    fi
-    if [ -d "venv" ]; then
-        echo "Rebuilding incompatible virtual environment with $PYTHON_BIN..."
-        "$PYTHON_BIN" -m venv --clear venv
+    }
+    if [ -d venv ]; then
+        "$python_bin" -m venv --clear venv
     else
-        echo "Creating virtual environment with $PYTHON_BIN..."
-        "$PYTHON_BIN" -m venv venv
+        "$python_bin" -m venv venv
     fi
-    echo "✓ Virtual environment created"
-    echo ""
 fi
 
-# Check if dependencies are installed
-echo "Checking dependencies..."
-if ! "$VENV_PYTHON" -c "import networkx" 2>/dev/null; then
+if ! "$venv_python" -c 'import networkx, particle, uproot' 2>/dev/null; then
     echo "Installing Python dependencies..."
-    "$VENV_PYTHON" -m pip install -q -r requirements.txt
-    echo "✓ Dependencies installed"
-else
-    echo "✓ Dependencies already installed"
-fi
-echo ""
-
-CMSSET_DEFAULT="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
-
-source_cms_environment() {
-    # The CMS bootstrap currently reads a few optional unset variables. Keep
-    # nounset enabled for this script, but do not impose it on external setup.
-    set +u
-    # shellcheck disable=SC1090
-    source "$CMSSET_DEFAULT"
-    set -u
-}
-
-# Uploaded ROOT and EOS processing needs a regular CMSSW project containing the TruthInfo
-# dumper. Keep the local launcher consistent with the container entrypoint:
-# use an explicitly configured runtime first, then reuse or create a managed
-# pre3 project under data/cmssw.
-CMSSW_RELEASE="${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
-CMSSW_SCRAM_ARCH="${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
-if [ -n "${TRUTHVIZ_CMSSW_INSTALL_ROOT:-}" ]; then
-    CMSSW_INSTALL_ROOT="$TRUTHVIZ_CMSSW_INSTALL_ROOT"
-elif [ -n "${TRUTHVIZ_JOB_ROOT:-}" ]; then
-    CMSSW_INSTALL_ROOT="$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw"
-else
-    CMSSW_INSTALL_ROOT="$SCRIPT_DIR/data/cmssw"
+    "$venv_python" -m pip install -q -r requirements.txt
 fi
 
-find_cmssw_src() {
-    local root="$1"
-    local candidate="$root/$CMSSW_RELEASE/src"
+cmsset_default="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
+release="${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
+arch="${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
+topic="${TRUTHVIZ_CMSSW_TOPIC:-}"
+install_root="${TRUTHVIZ_CMSSW_INSTALL_ROOT:-$project_root/data/cmssw}"
+
+find_truthinfo_src() {
+    local candidate="$1"
     if [ -f "$candidate/PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
         printf '%s\n' "$candidate"
         return 0
@@ -150,138 +106,65 @@ find_cmssw_src() {
     return 1
 }
 
-install_cmssw_release() {
-    local project_dir="$CMSSW_INSTALL_ROOT/$CMSSW_RELEASE"
-
-    if [ ! -d "$project_dir/.SCRAM" ]; then
-        if [ -e "$project_dir" ]; then
-            echo "Error: incomplete CMSSW project already exists: $project_dir" >&2
-            echo "Remove it or select another TRUTHVIZ_CMSSW_INSTALL_ROOT before retrying." >&2
-            return 1
-        fi
-        (
-            cd "$CMSSW_INSTALL_ROOT"
-            scram project CMSSW "$CMSSW_RELEASE"
-        )
-    fi
-
-    (
-        cd "$project_dir/src"
-        set +u
-        eval "$(scram runtime -sh)"
-        set -u
-        release_truth_info="$CMSSW_RELEASE_BASE/src/PhysicsTools/TruthInfo"
-        if [ ! -f "$release_truth_info/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
-            echo "Error: PhysicsTools/TruthInfo is missing from $CMSSW_RELEASE_BASE" >&2
-            exit 1
-        fi
-        mkdir -p PhysicsTools
-        if [ ! -e PhysicsTools/TruthInfo ]; then
-            ln -s "$release_truth_info" PhysicsTools/TruthInfo
-        fi
-    )
-}
-
 if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ] && [ -z "${CMSSW_BASE:-}" ]; then
-    export SCRAM_ARCH="$CMSSW_SCRAM_ARCH"
-
-    if found_src="$(find_cmssw_src "$SCRIPT_DIR/..")"; then
-        export TRUTHVIZ_CMSSW_SRC="$found_src"
-        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
-    elif found_src="$(find_cmssw_src "$SCRIPT_DIR")"; then
-        export TRUTHVIZ_CMSSW_SRC="$found_src"
-        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
-    elif found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
-        export TRUTHVIZ_CMSSW_SRC="$found_src"
-        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
-    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != "1" ] && [ -r "$CMSSET_DEFAULT" ]; then
-        mkdir -p "$CMSSW_INSTALL_ROOT"
-        install_lock="$CMSSW_INSTALL_ROOT/.install-$CMSSW_RELEASE.lock"
-        until mkdir "$install_lock" 2>/dev/null; do
-            echo "Waiting for CMSSW install lock: $install_lock"
-            sleep 10
-            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
-                export TRUTHVIZ_CMSSW_SRC="$found_src"
-                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    cmssw_src=""
+    if [ -n "$topic" ]; then
+        if [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != 1 ]; then
+            "$project_root/scripts/install-cmssw.sh" \
+                --release "$release" \
+                --arch "$arch" \
+                --install-root "$install_root" \
+                --topic "$topic" \
+                --jobs "${TRUTHVIZ_CMSSW_BUILD_JOBS:-4}"
+            cmssw_src="$install_root/$release/src"
+        fi
+    else
+        for candidate in \
+            "$project_root/../$release/src" \
+            "$project_root/$release/src" \
+            "$install_root/$release/src" \
+            "/cvmfs/cms.cern.ch/$arch/cms/cmssw/$release/src"; do
+            if cmssw_src="$(find_truthinfo_src "$candidate")"; then
                 break
             fi
+            cmssw_src=""
         done
-
-        if [ -z "${TRUTHVIZ_CMSSW_SRC:-}" ]; then
-            trap 'rmdir "$install_lock" 2>/dev/null || true' EXIT
-            export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
-            source_cms_environment
-            if ! command -v scram >/dev/null 2>&1; then
-                echo "Error: scram was not found after sourcing $CMSSET_DEFAULT" >&2
-                exit 1
-            fi
-            echo "Installing $CMSSW_RELEASE ($SCRAM_ARCH) in $CMSSW_INSTALL_ROOT"
-            install_cmssw_release
-            rmdir "$install_lock" 2>/dev/null || true
-            trap - EXIT
-
-            if found_src="$(find_cmssw_src "$CMSSW_INSTALL_ROOT")"; then
-                export TRUTHVIZ_CMSSW_SRC="$found_src"
-                echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
-            else
-                echo "Error: CMSSW install completed but no source area was found in $CMSSW_INSTALL_ROOT" >&2
-                exit 1
-            fi
+        if [ -z "$cmssw_src" ] && [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != 1 ] && [ -r "$cmsset_default" ]; then
+            "$project_root/scripts/install-cmssw.sh" \
+                --release "$release" \
+                --arch "$arch" \
+                --install-root "$install_root"
+            cmssw_src="$install_root/$release/src"
         fi
-    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != "1" ]; then
-        echo "Warning: $CMSSET_DEFAULT is unavailable; ROOT processing will need TRUTHVIZ_CMSSW_SRC or CMSSW_BASE." >&2
+    fi
+
+    if [ -n "$cmssw_src" ]; then
+        export TRUTHVIZ_CMSSW_SRC="$cmssw_src"
+        echo "Using TRUTHVIZ_CMSSW_SRC=$TRUTHVIZ_CMSSW_SRC"
+    elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" != 1 ]; then
+        echo "Warning: no usable CMSSW source area was found; ROOT processing is unavailable." >&2
     fi
 fi
 
-if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
-    if [ -r "$CMSSET_DEFAULT" ]; then
-        export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
-        source_cms_environment
-    fi
+if [ -r "$cmsset_default" ]; then
+    export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
+    set +u
+    # shellcheck disable=SC1090
+    source "$cmsset_default"
+    set -u
+fi
 
+if [ -z "${TRUTHVIZ_CMSRUN_WRAPPER:-}" ]; then
     scram_arch=""
     if command -v scram >/dev/null 2>&1; then
         scram_arch="$(scram arch 2>/dev/null || true)"
     fi
-
-    if [[ "$scram_arch" != el9* ]]; then
-        if command -v cmssw-el9 >/dev/null 2>&1; then
-            export TRUTHVIZ_CMSRUN_WRAPPER="cmssw-el9"
-            if [ -n "$scram_arch" ]; then
-                echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for local cmsRun jobs because scram arch is $scram_arch"
-            else
-                echo "Using TRUTHVIZ_CMSRUN_WRAPPER=$TRUTHVIZ_CMSRUN_WRAPPER for local cmsRun jobs because scram arch is unavailable"
-            fi
-            echo ""
-        elif [ -n "$scram_arch" ]; then
-            echo "Warning: scram arch is $scram_arch, but cmssw-el9 was not found; local cmsRun jobs may fail."
-            echo ""
-        else
-            echo "Warning: scram arch is unavailable and cmssw-el9 was not found; local cmsRun jobs may fail."
-            echo ""
-        fi
+    if [[ "$scram_arch" != el9* ]] && command -v cmssw-el9 >/dev/null 2>&1; then
+        export TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9
+        echo "Using TRUTHVIZ_CMSRUN_WRAPPER=cmssw-el9 for local ROOT jobs"
     fi
 fi
 
-# Start server
-echo ""
+echo
 echo "Starting web server..."
-echo "============================================================"
-echo ""
-SERVER_HOST="${TRUTHVIZ_SERVER_HOST:-localhost}"
-SERVER_PORT="${TRUTHVIZ_SERVER_PORT:-8009}"
-SERVER_ARGS=(--host "$SERVER_HOST" --start-port "$SERVER_PORT")
-
-case "${TRUTHVIZ_SERVER_AUTO_FIND_PORT:-1}" in
-    0|false|no)
-        SERVER_ARGS+=(--no-auto-find-port)
-        ;;
-    1|true|yes|'')
-        ;;
-    *)
-        echo "Error: TRUTHVIZ_SERVER_AUTO_FIND_PORT must be 0/1, true/false, or yes/no" >&2
-        exit 1
-        ;;
-esac
-
-"$VENV_PYTHON" server.py "${SERVER_ARGS[@]}"
+exec "$project_root/scripts/start-server.sh"

@@ -80,7 +80,7 @@ Run as the host UID when possible so these files do not become root-owned.
 Validate the rendered page from the host as well as with the container health
 check; a successful API response alone does not prove that the browser UI
 loaded. For a deployment-style test, build `Dockerfile` and exercise its
-`run.sh` image entrypoint separately.
+`scripts/run-production.sh` image entrypoint separately.
 
 
 
@@ -90,7 +90,7 @@ Run the cheap checks first, then the container/API checks when the change
 affects runtime behavior:
 
 ```bash
-bash -n run.sh dev visualizeTruthGraph
+bash -n run.sh dev visualizeTruthGraph scripts/*.sh
 venv/bin/python -m unittest discover -s tests -v
 venv/bin/python -m py_compile server.py truth_pipeline.py visualizeTruthGraph preprocess/*.py tests/*.py
 docker compose config
@@ -118,9 +118,9 @@ errors. API success alone does not prove that the Cytoscape/Plotly UI loaded.
 
 ## CMSSW and data-pipeline invariants
 
-- Prefer an explicit `TRUTHVIZ_CMSSW_SRC` or `CMSSW_BASE` in the container when
-  a valid CVMFS release is available. Otherwise `run.sh` may provision a
-  managed release under `data/cmssw`.
+- Production uses an explicit `TRUTHVIZ_CMSSW_SRC` and never provisions CMSSW
+  at application startup. `run.sh` may provision a managed local release; a
+  fork topic must use its own install root.
 - The generated standalone wrapper must retain both the Alpaka process
   modifier and `process.options.accelerators = cms.untracked.vstring("*")`.
   Either one alone is insufficient for the pre3 runtime.
