@@ -15,6 +15,7 @@ default_permissions = "container-dev"
 ":minimal" = "read"
 ":tmpdir" = "write"
 ":slash_tmp" = "write"
+"/home/cuisset/.docker" = "write"
 
 
 [permissions.container-dev.network]
