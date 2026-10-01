@@ -24,7 +24,7 @@ RUN python3 -m venv venv \
     && chmod -R g=u /opt/app-root/src 
 
 ARG TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_X_2026-09-28-2300
-ARG TRUTHVIZ_CMSSW_TOPIC=felicepantaleo:truth-adaptive-associator-v1
+ARG TRUTHVIZ_CMSSW_TOPIC=tcuisset:truth-adaptive-associator-v1-fixDump
 ARG TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14
 
 ENV TRUTHVIZ_PYTHON=python3 \

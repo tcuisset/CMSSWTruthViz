@@ -8,7 +8,7 @@ WORKDIR /workspace
 ENV CMSSET_DEFAULT=/cvmfs/cms.cern.ch/cmsset_default.sh \
     SITECONFIG_PATH=/cvmfs/cms.cern.ch/SITECONF/T2_CH_CERN/ \
     TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_X_2026-09-28-2300 \
-    TRUTHVIZ_CMSSW_TOPIC=felicepantaleo:truth-adaptive-associator-v1 \
+    TRUTHVIZ_CMSSW_TOPIC=tcuisset:truth-adaptive-associator-v1-fixDump \
     TRUTHVIZ_SCRAM_ARCH=el9_amd64_gcc14 \
     TRUTHVIZ_SERVER_HOST=0.0.0.0 \
     TRUTHVIZ_SERVER_PORT=3000 \
