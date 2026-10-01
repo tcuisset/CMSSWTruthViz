@@ -8,6 +8,13 @@ function load(file, context) {
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context);
 }
 
+function loadGraphManager(context) {
+    vm.runInContext(
+        `${fs.readFileSync(path.join(root, 'app/js/graph.js'), 'utf8')}\nthis.GraphManager = GraphManager;`,
+        context
+    );
+}
+
 test('HTTP without explicit backend configuration remains visualization only', () => {
     const context = vm.createContext({window: {location: {protocol: 'http:'}},
         document: {addEventListener() {}}});
@@ -37,4 +44,22 @@ test('node details extract energy from p4 without a removed GraphManager method'
     assert.equal(vm.runInContext('PanelManager.getEnergy({p4: "(3, 4, 0, 5)"})', context), 5);
     assert.equal(vm.runInContext('PanelManager.getEnergy({rawEnergy: 7, p4: "(3, 4, 0, 5)"})', context), 7);
     assert.ok(Number.isNaN(vm.runInContext('PanelManager.getEnergy({})', context)));
+});
+
+test('pileup filtering uses truthPileup and is enabled by default', () => {
+    const context = vm.createContext({});
+    loadGraphManager(context);
+    const manager = context.GraphManager;
+    const node = (truthPileup) => ({
+        data(key) {
+            return {truthKind: 'particle', truthLevel: 'signal', truthPileup}[key];
+        }
+    });
+
+    assert.equal(manager.hidePileup, true);
+    assert.equal(manager.isTruthLevelFiltered(node(1)), true);
+    assert.equal(manager.isTruthLevelFiltered(node(0)), false);
+
+    manager.hidePileup = false;
+    assert.equal(manager.isTruthLevelFiltered(node(1)), false);
 });

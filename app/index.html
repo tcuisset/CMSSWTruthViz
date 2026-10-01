@@ -119,11 +119,16 @@
                                 <button id="level-filter-none" type="button">none</button>
                             </div>
                             <div id="level-filter-items"></div>
+                            <label class="checkbox-label" for="hide-pileup-checkbox"
+                                   title="Hide truth nodes marked as pileup">
+                                <input type="checkbox" id="hide-pileup-checkbox" checked />
+                                Hide pileup
+                            </label>
                         </div>
                         <div class="filter-note truth-only" id="filter-status"></div>
                     </div>
                     <div id="level-help" class="control-help-popover hidden" role="note">
-                        Toggle the dominant truth levels shown in the graph. Use all or none to change every listed level at once.
+                        Toggle the dominant truth levels shown in the graph. Use all or none to change every listed level at once. Hide pileup removes nodes marked with truthPileup = 1.
                     </div>
                 </details>
                 <details class="control-group control-box" id="association-controls">

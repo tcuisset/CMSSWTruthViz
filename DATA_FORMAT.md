@@ -86,10 +86,11 @@ Common optional fields include:
 - `prodVtx`, `endVtx`, `nIn`, `nOut`: relationship and count fields copied from DOT attributes.
 - `hasGen`, `hasSim`, `crossedBoundary`, `directHitsDetIds`: truth-graph fields used by frontend styling or the 3D panel when present.
 - `truthKind`, `truthLevel`, `truthLevels`, `truthFootprint`, `truthRole`, `truthReason`,
-  `truthTitle`, `truthSubtitle`, `truthHover`: the truth-graph classification, added only
+  `truthPileup`, `truthTitle`, `truthSubtitle`, `truthHover`: the truth-graph classification, added only
   for a `TruthLogicalGraph` DOT. They carry the node kind, the dominant truth level, the
-  hit footprint, the role of an artificial vertex, the two-line label and the hover
-  summary. See FRONTEND.md for how each is drawn.
+  hit footprint, the pileup flag (`1` for pileup and `0` for signal), the role of an
+  artificial vertex, the two-line label and the hover summary. See FRONTEND.md for how
+  each is drawn.
 - `shape`, `color`, `fillcolor`, `style`, `penwidth`, and other DOT styling attributes copied from the DOT file.
 
 The parser preserves most DOT attributes as flat node properties. The frontend therefore treats unknown attributes as displayable metadata and as fields usable by advanced search.

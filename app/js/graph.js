@@ -19,6 +19,8 @@ const GraphManager = {
     // Truth-level filtering collapses hidden nodes: visible parents are joined to
     // visible children, so nothing is orphaned.
     hiddenTruthLevels: new Set(),
+    // Pileup nodes are hidden by default alongside the truth-level filter.
+    hidePileup: true,
     // The reco overlay is shown or hidden independently of truth-level filtering.
     showRecoObjects: true,
     forceAtlas2Registered: false,
@@ -1317,6 +1319,12 @@ const GraphManager = {
             items.appendChild(label);
         });
 
+        const hidePileup = document.getElementById('hide-pileup-checkbox');
+        if (hidePileup) {
+            hidePileup.checked = this.hidePileup;
+            hidePileup.onchange = () => this.setPileupHidden(hidePileup.checked);
+        }
+
         const setAll = (visible) => {
             items.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = visible; });
             this.hiddenTruthLevels = visible ? new Set() : new Set(levels);
@@ -1496,8 +1504,8 @@ const GraphManager = {
     },
 
     /**
-     * Hide truth levels selected by the user, then join the visible parents of
-     * hidden nodes to their visible children.
+     * Hide truth nodes rejected by the active filters, then join the visible
+     * parents of hidden nodes to their visible children.
      */
     applyTruthLevelFilter() {
         this.cy.edges('[isTruthLevelBypass]').remove();
@@ -1569,13 +1577,20 @@ const GraphManager = {
     },
 
     /**
-     * Report whether the truth-level filter rejects this node. Vertices are not
-     * dropped for a level that they do not carry.
+     * Report whether the active truth filters reject this node. The pileup flag
+     * applies to every node carrying it; level selection applies to particles.
      */
     isTruthLevelFiltered(node) {
+        if (this.hidePileup && this.isTruthyAttribute(node.data('truthPileup'))) return true;
         if (!this.hasTruthClassification(node)) return false;
         return this.truthKind(node) === 'particle'
             && this.hiddenTruthLevels.has(this.truthLevel(node));
+    },
+
+    setPileupHidden(shouldHide) {
+        this.hidePileup = shouldHide;
+        this.applyTruthLevelFilter();
+        this.relayoutVisible();
     },
 
     setShowRecoObjects(shouldShow) {
