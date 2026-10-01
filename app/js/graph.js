@@ -16,22 +16,12 @@ const GraphManager = {
     fcoseRegistered: false,
     elkRegistered: false,
     graphName: '',
-    // Every filter starts off: the first view of a graph is the whole graph.
-    hideGenEventNodes: false,
-    hideSimVertexKey0Node: false,
-    hidePartonShower: false,
-    // Truth filters. Every one of them collapses: a hidden node's visible parents
-    // are joined to its visible children, so nothing is ever orphaned.
-    hidePileup: false,
-    hideUnderlyingEvent: false,
-    hideZeroSimHitSubgraphs: false,
-    energyThresholdGeV: 0,
+    // Truth-level filtering collapses hidden nodes: visible parents are joined to
+    // visible children, so nothing is orphaned.
     hiddenTruthLevels: new Set(),
-    // The reco overlay is shown or hidden on its own, apart from the truth filters.
+    // The reco overlay is shown or hidden independently of truth-level filtering.
     showRecoObjects: true,
     forceAtlas2Registered: false,
-    hideSmallDisconnectedSubgraphs: false,
-    smallDisconnectedSubgraphNodeLimit: 10,
     nodeTypeColors: {
         gen: '#c1daf3',
         sim: '#e4b892',
@@ -551,35 +541,8 @@ const GraphManager = {
         return idMatch ? idMatch[1] : '';
     },
 
-    extractFourthTupleValue(value) {
-        if (typeof value !== 'string') return null;
-
-        const cleaned = value.trim().replace(/^<|>$/g, '').trim();
-        if (!cleaned.startsWith('(') || !cleaned.endsWith(')')) return null;
-
-        const parts = cleaned.slice(1, -1).split(',').map(part => part.trim());
-        if (parts.length < 4) return null;
-
-        const parsed = Number.parseFloat(parts[3]);
-        return Number.isFinite(parsed) ? parsed : null;
-    },
-
-    getNodeEnergy(ele) {
-        const explicitEnergy = Number.parseFloat(ele.data('energy'));
-        if (Number.isFinite(explicitEnergy)) return explicitEnergy;
-
-        return this.extractFourthTupleValue(ele.data('p4'))
-            ?? this.extractFourthTupleValue(ele.data('x4'));
-    },
-
     getDagreEdgeWeight(edge) {
-        return 1; // attempt to get high energy edges straight
-        // const vertexEndpoints = [edge.source(), edge.target()].filter(node => this.isLogicalVertex(node));
-        // const energy = vertexEndpoints
-        //     .map(node => this.getNodeEnergy(node))
-        //     .find(value => Number.isFinite(value) && value > 0);
-
-        // return energy ? Math.max(1, Math.log1p(energy)) : 1;
+        return 1;
     },
 
     hasCrossedBoundary(ele) {
@@ -892,13 +855,7 @@ const GraphManager = {
                     }
                 },
                 {
-                    selector: 'node.parton-shower-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
-                    selector: 'node.small-subgraph-filtered',
+                    selector: 'node.truth-level-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -946,13 +903,7 @@ const GraphManager = {
                     }
                 },
                 {
-                    selector: 'edge.parton-shower-filtered',
-                    style: {
-                        'display': 'none'
-                    }
-                },
-                {
-                    selector: 'edge.small-subgraph-filtered',
+                    selector: 'edge.truth-level-filtered',
                     style: {
                         'display': 'none'
                     }
@@ -1034,7 +985,8 @@ const GraphManager = {
         // Event handlers
         this.setupEventHandlers();
         this.setupViewOptions();
-        this.applyInitialViewFilters();
+        this.applyTruthLevelFilter();
+        this.relayoutVisible();
 
         console.log('Graph initialized successfully');
         return this.cy;
@@ -1264,11 +1216,7 @@ const GraphManager = {
         truthLegend.classList.toggle('hidden', !isTruth);
         genSimLegend.classList.toggle('hidden', isTruth);
 
-        // The GEN/SIM view options have no meaning in the standalone truth graph,
-        // and the truth filters have none in the raw one.
-        document.querySelectorAll('.gensim-only').forEach((element) => {
-            element.classList.toggle('hidden', isTruth);
-        });
+        // Truth-level options have no meaning in the raw GEN/SIM graph.
         document.querySelectorAll('.truth-only').forEach((element) => {
             element.classList.toggle('hidden', !isTruth);
         });
@@ -1336,36 +1284,12 @@ const GraphManager = {
     },
 
     /**
-     * Build the level check list and wire every truth filter control.
+     * Build the truth-level check list and wire its controls.
      */
     setupTruthFilters() {
         const levelFilter = document.getElementById('level-filter');
         if (levelFilter && this.isLogicalGraph()) {
             levelFilter.classList.remove('hidden');
-        }
-
-        const pileup = document.getElementById('hide-pileup-checkbox');
-        if (pileup) {
-            pileup.checked = this.hidePileup;
-            pileup.addEventListener('change', () => this.setHidePileup(pileup.checked));
-        }
-
-        const underlyingEvent = document.getElementById('hide-underlying-event-checkbox');
-        if (underlyingEvent) {
-            underlyingEvent.checked = this.hideUnderlyingEvent;
-            underlyingEvent.addEventListener('change', () => this.setHideUnderlyingEvent(underlyingEvent.checked));
-        }
-
-        const zeroSimHits = document.getElementById('hide-zero-simhits-checkbox');
-        if (zeroSimHits) {
-            zeroSimHits.checked = this.hideZeroSimHitSubgraphs;
-            zeroSimHits.addEventListener('change', () => this.setHideZeroSimHitSubgraphs(zeroSimHits.checked));
-        }
-
-        const threshold = document.getElementById('energy-threshold-input');
-        if (threshold) {
-            threshold.value = String(this.energyThresholdGeV);
-            threshold.addEventListener('change', () => this.setEnergyThreshold(threshold.value));
         }
 
         const items = document.getElementById('level-filter-items');
@@ -1396,7 +1320,7 @@ const GraphManager = {
         const setAll = (visible) => {
             items.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = visible; });
             this.hiddenTruthLevels = visible ? new Set() : new Set(levels);
-            this.applyCollapsingFilters();
+            this.applyTruthLevelFilter();
             this.relayoutVisible();
         };
 
@@ -1540,37 +1464,6 @@ const GraphManager = {
         this.setupControlsToggle();
         this.buildLevelLegend();
         this.setupTruthFilters();
-        const hideGenEventCheckbox = document.getElementById('hide-gen-event-checkbox');
-        if (hideGenEventCheckbox) {
-            hideGenEventCheckbox.checked = this.hideGenEventNodes;
-            hideGenEventCheckbox.addEventListener('change', () => {
-                this.setHideGenEventNodes(hideGenEventCheckbox.checked);
-            });
-        }
-
-        const hideSimVertexKey0Checkbox = document.getElementById('hide-simvertex-key0-checkbox');
-        if (hideSimVertexKey0Checkbox) {
-            hideSimVertexKey0Checkbox.checked = this.hideSimVertexKey0Node;
-            hideSimVertexKey0Checkbox.addEventListener('change', () => {
-                this.setHideSimVertexKey0Node(hideSimVertexKey0Checkbox.checked);
-            });
-        }
-
-        const hideSmallSubgraphsCheckbox = document.getElementById('hide-small-subgraphs-checkbox');
-        if (hideSmallSubgraphsCheckbox) {
-            hideSmallSubgraphsCheckbox.checked = this.hideSmallDisconnectedSubgraphs;
-            hideSmallSubgraphsCheckbox.addEventListener('change', () => {
-                this.setHideSmallDisconnectedSubgraphs(hideSmallSubgraphsCheckbox.checked);
-            });
-        }
-
-        const hidePartonShowerCheckbox = document.getElementById('hide-parton-shower-checkbox');
-        if (hidePartonShowerCheckbox) {
-            hidePartonShowerCheckbox.checked = this.hidePartonShower;
-            hidePartonShowerCheckbox.addEventListener('change', () => {
-                this.setHidePartonShower(hidePartonShowerCheckbox.checked);
-            });
-        }
 
         const layoutEngineSelect = document.getElementById('layout-engine-select');
         if (layoutEngineSelect) {
@@ -1603,118 +1496,24 @@ const GraphManager = {
     },
 
     /**
-     * Apply default view filters after Cytoscape elements exist.
+     * Hide truth levels selected by the user, then join the visible parents of
+     * hidden nodes to their visible children.
      */
-    applyInitialViewFilters() {
-        this.applyGenEventFilter();
-        this.applySimVertexKey0Filter();
-        this.applyPartonShowerFilter();
-        this.applySmallDisconnectedSubgraphFilter();
-        this.relayoutVisible();
-    },
+    applyTruthLevelFilter() {
+        this.cy.edges('[isTruthLevelBypass]').remove();
+        this.cy.nodes().removeClass('truth-level-filtered');
+        this.cy.edges().removeClass('truth-level-filtered');
 
-    /**
-     * Toggle nodes whose DOT label contains GenEvent.
-     */
-    setHideGenEventNodes(shouldHide) {
-        this.hideGenEventNodes = shouldHide;
-        this.applyGenEventFilter();
-        this.relayoutVisible();
-    },
-
-    applyGenEventFilter() {
-        this.applyCollapsingFilters();
-    },
-
-    /**
-     * The source DOT label is stored as rawLabel; fall back to label for older bundles.
-     */
-    isGenEventNode(node) {
-        const labelAttribute = node.data('rawLabel') || node.data('label') || '';
-        return String(labelAttribute).includes('GenEvent');
-    },
-
-    /**
-     * Hide the SimVertex whose source label contains key=0.
-     */
-    setHideSimVertexKey0Node(shouldHide) {
-        this.hideSimVertexKey0Node = shouldHide;
-        this.applySimVertexKey0Filter();
-        this.relayoutVisible();
-    },
-
-    applySimVertexKey0Filter() {
-        this.applyCollapsingFilters();
-    },
-
-    /**
-     * The source DOT label is stored as rawLabel; fall back to label for older bundles.
-     */
-    isSimVertexKey0Node(node) {
-        const labelAttribute = node.data('rawLabel') || node.data('label') || '';
-        const label = String(labelAttribute);
-        return label.includes('SimVertex') && /\bkey=0\b/.test(label);
-    },
-
-    /**
-     * Hide status=2 gluons and add temporary edges from their parents to children.
-     */
-    setHidePartonShower(shouldHide) {
-        this.hidePartonShower = shouldHide;
-        this.applyPartonShowerFilter();
-        this.relayoutVisible();
-    },
-
-    applyPartonShowerFilter() {
-        this.applyCollapsingFilters();
-    },
-
-    /**
-     * Hide every node that a collapsing filter rejects, then join the visible
-     * parents of the hidden set to its visible children. All collapsing filters
-     * share one pass: run separately, each would bridge only around its own
-     * hidden nodes and could strand a node whose neighbours another filter hid.
-     */
-    applyCollapsingFilters() {
-        this.cy.edges('[isPartonShowerBypass]').remove();
-        this.cy.nodes().removeClass('parton-shower-filtered');
-        this.cy.edges().removeClass('parton-shower-filtered');
-
-        let hiddenNodes = this.cy.collection();
-
-        // The GenEvent node and the SimVertex key=0 node belong to the raw GEN/SIM
-        // graph. In the logical truth graph key=0 is an ordinary SimVertex, and
-        // hiding it would drop a real decay vertex, so neither filter runs there.
-        if (!this.isLogicalGraph()) {
-            if (this.hideGenEventNodes) {
-                hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isGenEventNode(node)));
-            }
-            if (this.hideSimVertexKey0Node) {
-                hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isSimVertexKey0Node(node)));
-            }
-        }
-
-        if (this.hidePartonShower) {
-            const partonShowerNodes = this.cy.nodes().filter(node => this.isPartonShowerNode(node));
-            hiddenNodes = hiddenNodes
-                .union(partonShowerNodes)
-                .union(this.getSingleChildParentVertices(partonShowerNodes));
-        }
-
-        if (this.hasActiveTruthFilter()) {
-            hiddenNodes = hiddenNodes.union(this.cy.nodes().filter(node => this.isTruthFiltered(node)));
-        }
-
+        let hiddenNodes = this.cy.nodes().filter(node => this.isTruthLevelFiltered(node));
         if (hiddenNodes.length === 0) {
             this.reportFilterState();
             return;
         }
 
         hiddenNodes = this.withDanglingVerticesHidden(hiddenNodes);
-
-        hiddenNodes.addClass('parton-shower-filtered');
-        hiddenNodes.connectedEdges().addClass('parton-shower-filtered');
-        this.addPartonShowerBypassEdges(hiddenNodes);
+        hiddenNodes.addClass('truth-level-filtered');
+        hiddenNodes.connectedEdges().addClass('truth-level-filtered');
+        this.addTruthLevelBypassEdges(hiddenNodes);
         this.reportFilterState();
     },
 
@@ -1727,13 +1526,7 @@ const GraphManager = {
 
         const total = this.cy.nodes().length;
         const visible = this.getVisibleNodes().length;
-        const messages = [`Showing ${visible} of ${total} nodes.`];
-
-        if (this.hideZeroSimHitSubgraphs && !this.graphHasSimHitInformation()) {
-            messages.push('This graph carries no sim-hit counts, so the sim-hit filter is not applied.');
-        }
-
-        status.textContent = messages.join(' ');
+        status.textContent = `Showing ${visible} of ${total} nodes.`;
     },
 
     /**
@@ -1776,85 +1569,13 @@ const GraphManager = {
     },
 
     /**
-     * Report whether the graph carries sim-hit counts at all. A DOT dumped without
-     * a hit index reports zero for every particle, and hiding on that would empty
-     * the view rather than drop the particles that leave nothing behind.
+     * Report whether the truth-level filter rejects this node. Vertices are not
+     * dropped for a level that they do not carry.
      */
-    graphHasSimHitInformation() {
-        if (this._simHitInformation === undefined) {
-            this._simHitInformation = this.cy.nodes().some((node) => {
-                if (this.truthKind(node) !== 'particle') return false;
-                const simHits = Number.parseInt(node.data('truthSimHits'), 10);
-                return Number.isFinite(simHits) && simHits > 0;
-            });
-        }
-        return this._simHitInformation;
-    },
-
-    hasActiveTruthFilter() {
-        return this.hidePileup
-            || this.hideUnderlyingEvent
-            || this.hideZeroSimHitSubgraphs
-            || this.energyThresholdGeV > 0
-            || this.hiddenTruthLevels.size > 0;
-    },
-
-    /**
-     * Report whether a truth filter rejects this node. Vertices are judged only on
-     * provenance, so a vertex is never dropped for an energy or a level that it
-     * does not carry.
-     */
-    isTruthFiltered(node) {
+    isTruthLevelFiltered(node) {
         if (!this.hasTruthClassification(node)) return false;
-        if (this.truthKind(node) === 'reco') return false;
-
-        if (this.hidePileup && String(node.data('truthPileup')) === '1') return true;
-
-        const kind = this.truthKind(node);
-        if (this.hideUnderlyingEvent) {
-            if (kind === 'artificial' && this.truthRole(node) === 'underlyingEvent') return true;
-            if (kind === 'particle' && this.truthLevelsOf(node).includes('underlyingEvent')) return true;
-        }
-
-        if (kind !== 'particle') return false;
-
-        if (this.hideZeroSimHitSubgraphs && this.graphHasSimHitInformation()) {
-            const simHits = Number.parseInt(node.data('truthSimHits'), 10);
-            if (Number.isFinite(simHits) && simHits === 0) return true;
-        }
-
-        if (this.energyThresholdGeV > 0) {
-            const energy = Number.parseFloat(node.data('truthEnergy'));
-            if (Number.isFinite(energy) && energy >= 0 && energy < this.energyThresholdGeV) return true;
-        }
-
-        if (this.hiddenTruthLevels.size > 0 && this.hiddenTruthLevels.has(this.truthLevel(node))) return true;
-
-        return false;
-    },
-
-    truthLevelsOf(node) {
-        const levels = node.data('truthLevels');
-        if (Array.isArray(levels)) return levels;
-        return String(levels || '').split(',').map(part => part.trim()).filter(Boolean);
-    },
-
-    setHidePileup(shouldHide) {
-        this.hidePileup = shouldHide;
-        this.applyCollapsingFilters();
-        this.relayoutVisible();
-    },
-
-    setHideUnderlyingEvent(shouldHide) {
-        this.hideUnderlyingEvent = shouldHide;
-        this.applyCollapsingFilters();
-        this.relayoutVisible();
-    },
-
-    setHideZeroSimHitSubgraphs(shouldHide) {
-        this.hideZeroSimHitSubgraphs = shouldHide;
-        this.applyCollapsingFilters();
-        this.relayoutVisible();
+        return this.truthKind(node) === 'particle'
+            && this.hiddenTruthLevels.has(this.truthLevel(node));
     },
 
     setShowRecoObjects(shouldShow) {
@@ -1876,80 +1597,17 @@ const GraphManager = {
         this.setWorkingPointStatus();
     },
 
-    setEnergyThreshold(thresholdGeV) {
-        const value = Number.parseFloat(thresholdGeV);
-        this.energyThresholdGeV = Number.isFinite(value) && value > 0 ? value : 0;
-        this.applyCollapsingFilters();
-        this.relayoutVisible();
-    },
-
     setTruthLevelVisible(level, visible) {
         if (visible) {
             this.hiddenTruthLevels.delete(level);
         } else {
             this.hiddenTruthLevels.add(level);
         }
-        this.applyCollapsingFilters();
+        this.applyTruthLevelFilter();
         this.relayoutVisible();
     },
 
-    isPartonShowerNode(node) {
-        const status = Number.parseInt(node.data('status'), 10);
-        return this.isShowerBookkeeping(this.getParticlePdgId(node))
-            || (status > 30 && status < 80 && status!=62 && Math.abs(this.getParticlePdgId(node))!=6) || (this.getParticlePdgId(node) === 21 && ( !(status == 2 || status == 11 || status == 71 || status == 72) || this.getNodeEnergy(node)<10 ) );
-    },
-
-    /**
-     * Report whether a PDG id names shower bookkeeping rather than a particle a
-     * detector could be asked about: a string, a cluster, a diquark, a pomeron or a
-     * generator-internal state. Same rule as truth::isShowerObject, minus the bare
-     * partons, which the levels partonJets and hardProcess do ask about. The main
-     * event now keeps its shower, so these reach the graph.
-     */
-    isShowerBookkeeping(pdgId) {
-        const id = Math.abs(Number.parseInt(pdgId, 10));
-        if (!Number.isFinite(id) || id === 0) return false;
-        if (id >= 91 && id <= 94) return true;
-        if (id === 990) return true;
-        if (id >= 1000 && id <= 9999 && Math.floor(id / 10) % 10 === 0 && Math.floor(id / 100) % 10 !== 0) return true;
-        return id >= 9900000 && id < 1000000000;
-    },
-
-    getSingleChildParentVertices(partonShowerNodes) {
-        let parentVertices = this.cy.collection();
-
-        partonShowerNodes.forEach(node => {
-            node.incomers('node').forEach(parent => {
-                if (this.isSingleChildParentVertex(parent, node)) {
-                    parentVertices = parentVertices.union(parent);
-                }
-            });
-        });
-
-        return parentVertices;
-    },
-
-    isSingleChildParentVertex(parent, child) {
-        if (!this.isVertexNode(parent)) {
-            return false;
-        }
-
-        const children = parent.outgoers('node');
-        return children.length === 1 && children[0].id() === child.id();
-    },
-
-    isVertexNode(node) {
-        const type = this.getNodeKind(node);
-        const shape = String(node.data('shape') || '').trim();
-        return type === 'GenVertex'
-            || type === 'SimVertex'
-            || type === 'GenSimVertex'
-            || type === 'LogicalVertex'
-            || shape === 'diamond'
-            || this.isLogicalVertex(node);
-    },
-
-    addPartonShowerBypassEdges(hiddenNodes) {
+    addTruthLevelBypassEdges(hiddenNodes) {
         const hiddenIds = new Set(hiddenNodes.map(node => node.id()));
         const edgeKeys = new Set(this.cy.edges().map(edge => `${edge.source().id()}->${edge.target().id()}`));
         const bypassEdges = [];
@@ -1973,10 +1631,10 @@ const GraphManager = {
                     bypassEdges.push({
                         group: 'edges',
                         data: {
-                            id: `parton-shower-bypass-${parent.id()}-${child.id()}`,
+                            id: `truth-level-bypass-${parent.id()}-${child.id()}`,
                             source: parent.id(),
                             target: child.id(),
-                            isPartonShowerBypass: true
+                            isTruthLevelBypass: true
                         }
                     });
                 });
@@ -1999,7 +1657,7 @@ const GraphManager = {
             const edges = useIncoming ? node.incomers('edge') : node.outgoers('edge');
 
             edges.forEach(edge => {
-                if (edge.data('isPartonShowerBypass')) {
+                if (edge.data('isTruthLevelBypass')) {
                     return;
                 }
 
@@ -2018,70 +1676,6 @@ const GraphManager = {
         }
 
         return boundaryNodes;
-    },
-
-    /**
-     * Hide disconnected components whose total size is below the configured limit.
-     */
-    setHideSmallDisconnectedSubgraphs(shouldHide) {
-        this.hideSmallDisconnectedSubgraphs = shouldHide;
-        this.applySmallDisconnectedSubgraphFilter();
-        this.relayoutVisible();
-    },
-
-    /**
-     * Apply the small disconnected subgraph filter without disturbing other filters.
-     */
-    applySmallDisconnectedSubgraphFilter() {
-        this.cy.nodes().removeClass('small-subgraph-filtered');
-        this.cy.edges().removeClass('small-subgraph-filtered');
-
-        if (!this.hideSmallDisconnectedSubgraphs) {
-            return;
-        }
-
-        this.getSmallDisconnectedSubgraphNodes().addClass('small-subgraph-filtered');
-        this.cy.nodes('.small-subgraph-filtered').connectedEdges().addClass('small-subgraph-filtered');
-    },
-
-    /**
-     * Connected components are computed as undirected components over the full graph.
-     */
-    getSmallDisconnectedSubgraphNodes() {
-        const visited = new Set();
-        let nodesToHide = this.cy.collection();
-
-        this.cy.nodes().forEach(startNode => {
-            if (visited.has(startNode.id())) {
-                return;
-            }
-
-            const componentNodes = [];
-            const stack = [startNode];
-            visited.add(startNode.id());
-
-            while (stack.length > 0) {
-                const node = stack.pop();
-                componentNodes.push(node);
-
-                node.connectedEdges().forEach(edge => {
-                    const source = edge.source();
-                    const target = edge.target();
-                    const neighbor = source.id() === node.id() ? target : source;
-
-                    if (!visited.has(neighbor.id())) {
-                        visited.add(neighbor.id());
-                        stack.push(neighbor);
-                    }
-                });
-            }
-
-            if (componentNodes.length < this.smallDisconnectedSubgraphNodeLimit) {
-                nodesToHide = nodesToHide.union(this.cy.collection(componentNodes));
-            }
-        });
-
-        return nodesToHide;
     },
 
     /**
@@ -2212,7 +1806,7 @@ const GraphManager = {
     },
 
     /**
-     * Clear focus/dependency visibility filtering while preserving view option filters.
+     * Clear focus/dependency filtering while preserving truth-level filtering.
      */
     clearSelectionFilter() {
         this.cy.nodes().removeClass('hidden');
@@ -2227,10 +1821,7 @@ const GraphManager = {
     reset() {
         this.cy.nodes().removeClass('highlighted dimmed selected hidden');
         this.cy.edges().removeClass('highlighted dimmed selected hidden');
-        this.applyGenEventFilter();
-        this.applySimVertexKey0Filter();
-        this.applyPartonShowerFilter();
-        this.applySmallDisconnectedSubgraphFilter();
+        this.applyTruthLevelFilter();
         this.fitVisible();
     },
 
@@ -2946,8 +2537,7 @@ const GraphManager = {
 
     isNodeVisibleForLayout(node) {
         return !node.hasClass('hidden')
-            && !node.hasClass('parton-shower-filtered')
-            && !node.hasClass('small-subgraph-filtered')
+            && !node.hasClass('truth-level-filtered')
             && !node.hasClass('reco-filtered');
     },
 
@@ -2960,8 +2550,7 @@ const GraphManager = {
             if (anchor && edge.data('workingPoint') !== anchor) return false;
         }
         return !edge.hasClass('hidden')
-            && !edge.hasClass('parton-shower-filtered')
-            && !edge.hasClass('small-subgraph-filtered')
+            && !edge.hasClass('truth-level-filtered')
             && !edge.hasClass('reco-filtered')
             && this.isNodeVisibleForLayout(edge.source())
             && this.isNodeVisibleForLayout(edge.target());

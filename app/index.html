@@ -105,51 +105,6 @@
                     </div>
                 </details>
 
-                <details class="control-group control-box" id="visibility-controls">
-                    <summary class="control-group-summary">
-                        <span class="control-group-title">Visibility</span>
-                        <button class="control-help" type="button" aria-expanded="false"
-                                aria-controls="visibility-help" title="About visibility controls">?</button>
-                    </summary>
-                    <div class="control-group-body control-group-body-column">
-                        <label class="checkbox-label gensim-only" for="hide-gen-event-checkbox">
-                            <input type="checkbox" id="hide-gen-event-checkbox" />
-                            Hide GenEvent
-                        </label>
-                        <label class="checkbox-label gensim-only" for="hide-simvertex-key0-checkbox" title="Hide the SimVertex node whose label contains key=0">
-                            <input type="checkbox" id="hide-simvertex-key0-checkbox" />
-                            Hide SimVertex key=0
-                        </label>
-                        <label class="checkbox-label" for="hide-parton-shower-checkbox" title="Hide status=2 gluons and connect their parents directly to their children">
-                            <input type="checkbox" id="hide-parton-shower-checkbox" />
-                            Hide parton shower
-                        </label>
-                        <label class="checkbox-label" for="hide-small-subgraphs-checkbox" title="Hide disconnected graph components with fewer than 10 total nodes">
-                            <input type="checkbox" id="hide-small-subgraphs-checkbox" />
-                            Hide subgraphs &lt;10 nodes
-                        </label>
-                        <label class="checkbox-label truth-only" for="hide-pileup-checkbox" title="Hide everything that is not the signal interaction, that is bunch crossing 0 and event 0">
-                            <input type="checkbox" id="hide-pileup-checkbox" />
-                            Hide pile-up
-                        </label>
-                        <label class="checkbox-label truth-only" for="hide-underlying-event-checkbox" title="Hide particles carrying the underlyingEvent level and the artificial underlying-event vertex">
-                            <input type="checkbox" id="hide-underlying-event-checkbox" />
-                            Hide underlying event
-                        </label>
-                        <label class="checkbox-label truth-only" for="hide-zero-simhits-checkbox" title="Hide a particle whose whole subgraph leaves no sim hit in any channel">
-                            <input type="checkbox" id="hide-zero-simhits-checkbox" />
-                            Hide subgraphs with 0 sim hits
-                        </label>
-                        <label class="checkbox-label truth-only" for="energy-threshold-input" title="Hide particles whose energy is below this value">
-                            Hide E &lt;
-                            <input type="number" id="energy-threshold-input" min="0" step="0.1" value="0" />
-                            GeV
-                        </label>
-                    </div>
-                    <div id="visibility-help" class="control-help-popover hidden" role="note">
-                        These filters hide parts of the graph while preserving connections between the remaining visible nodes. The available options depend on the loaded graph type.
-                    </div>
-                </details>
                 <details class="control-group control-box" id="level-controls">
                     <summary class="control-group-summary">
                         <span class="control-group-title">Truth levels</span>

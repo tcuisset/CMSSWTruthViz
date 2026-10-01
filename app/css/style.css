@@ -1571,10 +1571,9 @@ body {
 }
 
 /* This stylesheet defines .hidden per element rather than globally, so the
-   legend blocks and the GEN/SIM view options need their own rules. */
+   legend blocks need their own rules. */
 #legend-truth.hidden,
 #legend-gensim.hidden,
-.checkbox-label.gensim-only.hidden,
 #node-tooltip.hidden {
     display: none;
 }
@@ -1595,20 +1594,10 @@ body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* Truth filters: the level check list and the energy threshold. */
-.checkbox-label.truth-only.hidden,
+/* Truth-level filter controls. */
 #level-filter.hidden,
 .filter-note.truth-only.hidden {
     display: none;
-}
-
-#energy-threshold-input {
-    width: 62px;
-    margin: 0 4px;
-    padding: 2px 4px;
-    border: 1px solid #bdc3c7;
-    border-radius: 3px;
-    font-size: 12px;
 }
 
 #level-filter {
