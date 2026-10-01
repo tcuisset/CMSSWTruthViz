@@ -118,9 +118,10 @@ errors. API success alone does not prove that the Cytoscape/Plotly UI loaded.
 
 ## CMSSW and data-pipeline invariants
 
-- Production uses an explicit `TRUTHVIZ_CMSSW_SRC` and never provisions CMSSW
-  at application startup. `run.sh` may provision a managed local release; a
-  fork topic must use its own install root.
+- Production uses an explicit `TRUTHVIZ_CMSSW_SRC` when supplied, derives the
+  upstream CVMFS release otherwise, and provisions a fork only when
+  `TRUTHVIZ_CMSSW_TOPIC` is set. `run.sh` may provision a managed local
+  release; a fork topic must use its own install root.
 - The generated standalone wrapper must retain both the Alpaka process
   modifier and `process.options.accelerators = cms.untracked.vstring("*")`.
   Either one alone is insufficient for the pre3 runtime.

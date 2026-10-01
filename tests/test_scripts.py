@@ -141,6 +141,62 @@ printf 'git %s\\n' "$*" >> "$CALL_LOG"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not contain PhysicsTools/TruthInfo", result.stderr)
 
+    def test_production_entrypoint_installs_requested_fork_topic(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            fake_bin = temporary_path / "bin"
+            install_root = temporary_path / "install"
+            release_base = temporary_path / "release-base"
+            cmsset = temporary_path / "cmsset_default.sh"
+            call_log = temporary_path / "calls.log"
+            fake_bin.mkdir()
+            cmsset.touch()
+            release_truth_info = release_base / "src/PhysicsTools/TruthInfo/test"
+            release_truth_info.mkdir(parents=True)
+            (release_truth_info / "dumpTruthGraphsFromGENSIMRECO_cfg.py").touch()
+
+            commands = {
+                "cmsrel": """#!/usr/bin/env bash
+set -eu
+printf 'cmsrel %s\\n' "$*" >> "$CALL_LOG"
+mkdir -p "$1/.SCRAM" "$1/src"
+""",
+                "scram": f"""#!/usr/bin/env bash
+set -eu
+if [ "$1" = runtime ]; then
+  printf '%s\\n' "export CMSSW_RELEASE_BASE='{release_base}'"
+else
+  printf 'scram %s\\n' "$*" >> "$CALL_LOG"
+fi
+""",
+                "git": """#!/usr/bin/env bash
+set -eu
+printf 'git %s\\n' "$*" >> "$CALL_LOG"
+""",
+            }
+            for name, content in commands.items():
+                command = fake_bin / name
+                command.write_text(content)
+                command.chmod(0o755)
+
+            result = self.run_script(
+                "scripts/run-production.sh",
+                env={
+                    "CALL_LOG": str(call_log),
+                    "CMSSET_DEFAULT": str(cmsset),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "TRUTHVIZ_CMSSW_RELEASE": "CMSSW_TEST",
+                    "TRUTHVIZ_SCRAM_ARCH": "el9_test",
+                    "TRUTHVIZ_CMSSW_TOPIC": "alice:feature",
+                    "TRUTHVIZ_CMSSW_INSTALL_ROOT": str(install_root),
+                    "TRUTHVIZ_SERVER_PYTHON": "/bin/true",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            project = install_root / "CMSSW_TEST"
+            self.assertEqual((project / ".truthviz-topic").read_text(), "alice:feature")
+            self.assertIn("git cms-rebase-topic alice:feature", call_log.read_text())
+
     def test_start_server_rejects_invalid_port_mode(self):
         result = self.run_script(
             "scripts/start-server.sh",

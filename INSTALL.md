@@ -191,12 +191,12 @@ browser dependencies and Python environment, then uses the small
 does not install npm packages, create a venv, provision CMSSW, or take an
 installation lock.
 
-The default production image points `TRUTHVIZ_CMSSW_SRC` directly at its
-configured upstream release on CVMFS. Select another upstream release with the
-`TRUTHVIZ_CMSSW_RELEASE` and `TRUTHVIZ_SCRAM_ARCH` Docker build arguments. A
-fork build needs a CMSSW project prepared by `scripts/install-cmssw.sh` in a
-CVMFS-enabled build or init environment and exposed to the application through
-`TRUTHVIZ_CMSSW_SRC`. See [OPENSHIFT.md](OPENSHIFT.md).
+The default production image derives the upstream CVMFS path from
+`TRUTHVIZ_CMSSW_RELEASE` and `TRUTHVIZ_SCRAM_ARCH`. For a fork deployment, set
+`TRUTHVIZ_CMSSW_TOPIC` and a writable `TRUTHVIZ_CMSSW_INSTALL_ROOT`; the
+production entrypoint automatically provisions the fork on first startup and
+reuses it afterward. An explicit `TRUTHVIZ_CMSSW_SRC` overrides automatic
+installation. See [OPENSHIFT.md](OPENSHIFT.md).
 
 ## Troubleshooting
 

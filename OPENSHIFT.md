@@ -28,13 +28,27 @@ ROOT and EOS processing requires:
 
 For the stock configuration, the image points directly to
 `/cvmfs/cms.cern.ch/el9_amd64_gcc14/cms/cmssw/CMSSW_20_1_0_pre3/src`.
-The production entrypoint never provisions CMSSW at pod startup, so concurrent
-pods do not need an installation lock.
+The production entrypoint does not provision this stock release at pod startup,
+so concurrent pods do not need an installation lock.
+
+To deploy a fork topic, set `TRUTHVIZ_CMSSW_TOPIC` in the application
+environment. The production entrypoint then automatically runs the included
+installer on first startup, reuses the matching completed project on later
+starts, and serializes concurrent startup attempts with a fork-install lock.
+Set `TRUTHVIZ_CMSSW_INSTALL_ROOT` explicitly; otherwise it is derived from
+`TRUTHVIZ_JOB_ROOT` (`$(dirname "$TRUTHVIZ_JOB_ROOT")/cmssw`). For example:
+
+```bash
+TRUTHVIZ_CMSSW_TOPIC=someone:my-branch
+TRUTHVIZ_CMSSW_INSTALL_ROOT=/persistent/cmssw
+TRUTHVIZ_CMSSW_BUILD_JOBS=8
+```
 
 An ordinary Docker/OpenShift build cannot run `cmsrel`: the `cmssw/el9` base
-image does not contain CVMFS, and CVMFS is mounted only in the runtime pod. To
-deploy a fork topic, run the included installer from a CVMFS-enabled init or
-build environment against a persistent volume:
+image does not contain CVMFS, and CVMFS is mounted only in the runtime pod.
+The runtime fork install therefore requires a writable persistent volume and
+network access to the relevant GitHub fork. The equivalent installer command,
+useful for a prewarmed volume or a dedicated init container, is:
 
 ```bash
 /opt/app-root/src/scripts/install-cmssw.sh \
@@ -45,15 +59,10 @@ build environment against a persistent volume:
   --jobs 8
 ```
 
-Configure the application container with:
-
-```bash
-TRUTHVIZ_CMSSW_SRC=/persistent/cmssw/CMSSW_20_1_0_pre3/src
-```
-
-Run the installer as a single init step, not in every application replica. It
-records the selected topic and refuses to reuse the directory for a different
-topic. A stock release normally needs no init step at all.
+If `TRUTHVIZ_CMSSW_SRC` is supplied, it takes precedence and the automatic
+installer is skipped. The installer records the selected topic and refuses to
+reuse the directory for a different topic. A stock release normally needs no
+install step at all.
 
 Useful runtime variables:
 
