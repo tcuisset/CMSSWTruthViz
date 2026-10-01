@@ -21,7 +21,9 @@ RUN python3 -m venv venv \
     && printf 'window.EMBEDDED_BUNDLE_DATA = null;\n' > app/js/bundle.js \
     && printf 'window.EMBEDDED_RECHITS_DATA = null;\n' > app/js/rechits.js \
     && printf 'window.EMBEDDED_ASSOCIATION_DATA = null;\n' > app/js/associations.js \
-    && chmod -R g=u /opt/app-root/src
+    && chmod -R g=u /opt/app-root/src \
+    && git config --global user.name "Container User" \
+    && git config --global user.email "container@localhost"
 
 ARG TRUTHVIZ_CMSSW_RELEASE=CMSSW_20_1_X_2026-09-28-2300
 ARG TRUTHVIZ_CMSSW_TOPIC=felicepantaleo:truth-adaptive-associator-v1
