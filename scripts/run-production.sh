@@ -77,7 +77,7 @@ if [ -n "$topic" ] && [ -z "$cmssw_src" ]; then
                 --arch "$arch" \
                 --install-root "$install_root" \
                 --topic "$topic" \
-                --jobs "${TRUTHVIZ_CMSSW_BUILD_JOBS:-4}"
+                --jobs "${TRUTHVIZ_CMSSW_BUILD_JOBS:-1}"
             cmssw_src="$fork_src"
             rmdir "$lock_dir" 2>/dev/null || true
             trap - EXIT
