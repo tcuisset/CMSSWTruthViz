@@ -4,6 +4,8 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cmsset_default="${CMSSET_DEFAULT:-/cvmfs/cms.cern.ch/cmsset_default.sh}"
 
+echo "[production] Starting Truth Graph Viewer"
+
 if [ ! -r "$cmsset_default" ]; then
     echo "Error: CMS environment bootstrap is unavailable: $cmsset_default" >&2
     echo "Mount /cvmfs/cms.cern.ch in the production container." >&2
@@ -12,10 +14,12 @@ fi
 
 export VO_CMS_SW_DIR="${VO_CMS_SW_DIR:-/cvmfs/cms.cern.ch}"
 # cmsset_default supplies scram/cmsRun and the site configuration used by jobs.
+echo "[production] Loading CMS environment from $cmsset_default"
 set +u
 # shellcheck disable=SC1090
 source "$cmsset_default"
 set -u
+echo "[production] CMS environment loaded"
 
 release="${TRUTHVIZ_CMSSW_RELEASE:-CMSSW_20_1_0_pre3}"
 arch="${TRUTHVIZ_SCRAM_ARCH:-el9_amd64_gcc14}"
@@ -23,6 +27,10 @@ topic="${TRUTHVIZ_CMSSW_TOPIC:-}"
 cmssw_src="${TRUTHVIZ_CMSSW_SRC:-}"
 if [ -z "$cmssw_src" ] && [ -n "${CMSSW_BASE:-}" ]; then
     cmssw_src="$CMSSW_BASE/src"
+fi
+echo "[production] Release=$release architecture=$arch${topic:+ topic=$topic}"
+if [ -n "$cmssw_src" ]; then
+    echo "[production] Using configured CMSSW source: $cmssw_src"
 fi
 
 # A topic requests a local fork project. Stock releases use the read-only
@@ -42,6 +50,7 @@ if [ -n "$topic" ] && [ -z "$cmssw_src" ]; then
     if [ -f "$topic_marker" ] && [ "$(<"$topic_marker")" = "$topic" ] && \
         [ -f "$fork_src/PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
         cmssw_src="$fork_src"
+        echo "[production] Reusing completed fork installation: $cmssw_src"
     elif [ "${TRUTHVIZ_SKIP_CMSSW_INSTALL:-0}" = 1 ]; then
         echo "Error: TRUTHVIZ_CMSSW_TOPIC is set but CMSSW installation is disabled." >&2
         exit 1
@@ -62,7 +71,7 @@ if [ -n "$topic" ] && [ -z "$cmssw_src" ]; then
 
         if [ -z "$cmssw_src" ]; then
             trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
-            echo "Installing CMSSW $release with topic $topic into $install_root"
+            echo "[production] Installing CMSSW $release with topic $topic into $install_root"
             "$project_root/scripts/install-cmssw.sh" \
                 --release "$release" \
                 --arch "$arch" \
@@ -79,11 +88,14 @@ fi
 if [ -z "$cmssw_src" ]; then
     # With no explicit area or topic, run directly from the configured release.
     cmssw_src="/cvmfs/cms.cern.ch/$arch/cms/cmssw/$release/src"
+    echo "[production] Using upstream CVMFS release: $cmssw_src"
 fi
 if [ ! -f "$cmssw_src/PhysicsTools/TruthInfo/test/dumpTruthGraphsFromGENSIMRECO_cfg.py" ]; then
     echo "Error: configured CMSSW area does not contain PhysicsTools/TruthInfo: $cmssw_src" >&2
     exit 1
 fi
 export TRUTHVIZ_CMSSW_SRC="$cmssw_src"
+echo "[production] CMSSW source validated"
+echo "[production] Starting server on ${TRUTHVIZ_SERVER_HOST:-0.0.0.0}:${TRUTHVIZ_SERVER_PORT:-8080}"
 
 exec "$project_root/scripts/start-server.sh"
